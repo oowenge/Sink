@@ -76,12 +76,17 @@ function updateLinkList(link, type) {
 <template>
   <main class="space-y-6">
     <div class="flex flex-col gap-6 sm:gap-2 sm:flex-row sm:justify-between">
-      <DashboardNav class="flex-1">
-        <div class="flex items-center gap-2">
-          <DashboardLinksEditor @update:link="updateLinkList" />
-          <DashboardLinksSort v-model:sort-by="sortBy" />
-        </div>
-      </DashboardNav>
+<DashboardNav class="flex-1">
+  <div class="flex items-center gap-2">
+    <NuxtLink to="/dashboard/links-batch">
+      <Button variant="outline">
+        批量创建
+      </Button>
+    </NuxtLink>
+    <DashboardLinksEditor @update:link="updateLinkList" />
+    <DashboardLinksSort v-model:sort-by="sortBy" />
+  </div>
+</DashboardNav>
       <LazyDashboardLinksSearch />
     </div>
     <section class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
