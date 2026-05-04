@@ -83,12 +83,17 @@ export default eventHandler(async (event) => {
       prepared.push({ link, row })
     }
     catch (e: any) {
-      prepared.push({
-        link: raw,
-        row,
-        error: e?.issues?.[0]?.message || e?.message || 'Validation failed',
-      })
-    }
+  // zod ZodError 有 .issues 数组,每条 issue 有 path 和 message
+  const firstIssue = e?.issues?.[0]
+  const errorMsg = firstIssue
+    ? `${firstIssue.path?.join('.') || 'field'}: ${firstIssue.message}`
+    : (e?.message || 'Validation failed')
+  prepared.push({
+    link: raw,
+    row,
+    error: errorMsg,
+  })
+}
   })
 
   const succeeded: SuccessItem[] = []
