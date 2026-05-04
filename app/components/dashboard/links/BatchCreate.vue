@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Loader2, Upload, Copy, Download, CheckCircle2, XCircle } from 'lucide-vue-next'
+import { CheckCircle2, Copy, Download, Loader2, Upload, XCircle } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 interface BatchResult {
@@ -27,8 +27,10 @@ const parsedLinks = computed(() => {
       const item: { url: string, slug?: string, comment?: string } = {
         url: parts[0] || '',
       }
-      if (parts[1]) item.slug = parts[1]
-      if (parts[2]) item.comment = parts[2]
+      if (parts[1])
+        item.slug = parts[1]
+      if (parts[2])
+        item.comment = parts[2]
       return item
     })
 })
@@ -38,20 +40,22 @@ const tooMany = computed(() => lineCount.value > 500)
 
 async function handleFileUpload(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file) return
+  if (!file)
+    return
   const text = await file.text()
   inputText.value = text
 }
 
 async function submit() {
-  if (!lineCount.value || tooMany.value) return
+  if (!lineCount.value || tooMany.value)
+    return
   loading.value = true
   result.value = null
   try {
-const data = await useAPI('/api/link/batch', {
-  method: 'POST',
-  body: { links: parsedLinks.value, onConflict: onConflict.value },
-}) as BatchResult
+    const data = await useAPI('/api/link/batch', {
+      method: 'POST',
+      body: { links: parsedLinks.value, onConflict: onConflict.value },
+    }) as BatchResult
     result.value = data
     if (data.failureCount === 0) {
       toast.success(`批量生成完成:${data.successCount} 条全部成功`)
@@ -69,14 +73,16 @@ const data = await useAPI('/api/link/batch', {
 }
 
 function copyAll() {
-  if (!result.value) return
+  if (!result.value)
+    return
   const text = result.value.succeeded.map(s => s.shortLink).join('\n')
   navigator.clipboard.writeText(text)
   toast.success('已复制全部短链')
 }
 
 function copyAsCSV() {
-  if (!result.value) return
+  if (!result.value)
+    return
   const header = 'row,original_url,slug,short_link'
   const rows = result.value.succeeded.map(s =>
     `${s.row},"${s.url}",${s.slug},${s.shortLink}`,
@@ -86,7 +92,8 @@ function copyAsCSV() {
 }
 
 function downloadCSV() {
-  if (!result.value) return
+  if (!result.value)
+    return
   const header = 'row,status,original_url,slug,short_link,reason'
   const okRows = result.value.succeeded.map(s =>
     `${s.row},success,"${s.url}",${s.slug},${s.shortLink},`,

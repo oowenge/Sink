@@ -19,12 +19,12 @@ const options = {
   data: props.data,
   margin: 10,
   qrOptions: { typeNumber: '0', mode: 'Byte', errorCorrectionLevel: 'Q' },
-  imageOptions: { 
-  hideBackgroundDots: true, 
-  imageSize: 0.4, 
-  margin: 2,
-  crossOrigin: 'anonymous'  // 新增
-},
+  imageOptions: {
+    hideBackgroundDots: true,
+    imageSize: 0.4,
+    margin: 2,
+    crossOrigin: 'anonymous', // 新增
+  },
   dotsOptions: { type: 'dots', color: '#000000', gradient: null },
   backgroundOptions: { color: '#ffffff', gradient: null },
   // 移除或注释：i image: props.image,
@@ -96,28 +96,29 @@ function downloadQRCode() {
 }
 
 onMounted(async () => {
-  let imageLoaded = true;
+  let imageLoaded = true
   if (props.image) {
-    const img = new Image();
-    img.src = props.image;
-    img.crossOrigin = 'anonymous';
+    const img = new Image()
+    img.src = props.image
+    img.crossOrigin = 'anonymous'
     await new Promise((resolve) => {
-      img.onload = resolve;
+      img.onload = resolve
       img.onerror = () => {
-        console.error('Image load failed:', props.image);
-        imageLoaded = false;
-        resolve();
-      };
-    });
+        console.error('Image load failed:', props.image)
+        imageLoaded = false
+        resolve()
+      }
+    })
   }
   if (!imageLoaded) {
-    qrCode.update({ image: '' });  // 移除 logo
+    qrCode.update({ image: '' }) // 移除 logo
   }
   try {
-    qrCode.append(qrCodeEl.value);
-    console.log('QR appended successfully');
-  } catch (error) {
-    console.error('QR append failed:', error);
+    qrCode.append(qrCodeEl.value)
+    console.log('QR appended successfully')
+  }
+  catch (error) {
+    console.error('QR append failed:', error)
   }
 })
 </script>

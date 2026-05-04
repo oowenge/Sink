@@ -72,7 +72,8 @@ export default eventHandler(async (event) => {
     const row = idx + 1
     try {
       const link = LinkSchema.parse(raw)
-      if (!caseSensitive) link.slug = link.slug.toLowerCase()
+      if (!caseSensitive)
+        link.slug = link.slug.toLowerCase()
 
       // 批次内 slug 去重(LinkSchema 会自动给 slug,理论上随机生成不会撞,但用户手填可能撞)
       if (seenSlugsInBatch.has(link.slug)) {
@@ -83,17 +84,17 @@ export default eventHandler(async (event) => {
       prepared.push({ link, row })
     }
     catch (e: any) {
-  // zod ZodError 有 .issues 数组,每条 issue 有 path 和 message
-  const firstIssue = e?.issues?.[0]
-  const errorMsg = firstIssue
-    ? `${firstIssue.path?.join('.') || 'field'}: ${firstIssue.message}`
-    : (e?.message || 'Validation failed')
-  prepared.push({
-    link: raw,
-    row,
-    error: errorMsg,
-  })
-}
+      // zod ZodError 有 .issues 数组,每条 issue 有 path 和 message
+      const firstIssue = e?.issues?.[0]
+      const errorMsg = firstIssue
+        ? `${firstIssue.path?.join('.') || 'field'}: ${firstIssue.message}`
+        : (e?.message || 'Validation failed')
+      prepared.push({
+        link: raw,
+        row,
+        error: errorMsg,
+      })
+    }
   })
 
   const succeeded: SuccessItem[] = []
