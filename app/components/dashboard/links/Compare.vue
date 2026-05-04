@@ -61,8 +61,7 @@ function buildQuery() {
     params.startAt = now - preset.seconds
     params.endAt = now
   }
-  if (country.value)
-    params.country = country.value
+if (country.value && country.value !== 'ALL') params.country = country.value
   if (slugContains.value.trim())
     params.slugContains = slugContains.value.trim()
 
@@ -174,14 +173,14 @@ function downloadCSV() {
               <SelectTrigger>
                 <SelectValue placeholder="选择国家" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">
-                  全球(不筛选)
-                </SelectItem>
-                <SelectItem v-for="c in COMMON_COUNTRIES" :key="c.code" :value="c.code">
-                  {{ c.name }}
-                </SelectItem>
-              </SelectContent>
+<SelectContent>
+  <SelectItem value="ALL">
+    全球(不筛选)
+  </SelectItem>
+  <SelectItem v-for="c in COMMON_COUNTRIES" :key="c.code" :value="c.code">
+    {{ c.name }}
+  </SelectItem>
+</SelectContent>
             </Select>
           </div>
 
