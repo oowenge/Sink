@@ -45,10 +45,10 @@ async function submit() {
   loading.value = true
   result.value = null
   try {
-    const data = await $fetch<BatchResult>('/api/link/batch', {
-      method: 'POST',
-      body: { links: parsedLinks.value, onConflict: onConflict.value },
-    })
+const data = await useAPI('/api/link/batch', {
+  method: 'POST',
+  body: { links: parsedLinks.value, onConflict: onConflict.value },
+}) as BatchResult
     result.value = data
     if (data.failureCount === 0) {
       toast.success(`批量生成完成:${data.successCount} 条全部成功`)
