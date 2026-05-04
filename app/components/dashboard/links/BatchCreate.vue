@@ -22,11 +22,14 @@ const parsedLinks = computed(() => {
     .filter(Boolean)
     .map((line) => {
       const parts = line.split(/[,\t]/).map(s => s.trim())
-      return {
+      // 关键:slug/comment 没填时不传(undefined),
+      // 让后端 LinkSchema 的 .default(nanoid()) 自动生成 slug
+      const item: { url: string, slug?: string, comment?: string } = {
         url: parts[0] || '',
-        slug: parts[1] || '',
-        comment: parts[2] || '',
       }
+      if (parts[1]) item.slug = parts[1]
+      if (parts[2]) item.comment = parts[2]
+      return item
     })
 })
 
