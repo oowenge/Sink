@@ -1,9 +1,47 @@
+import { LinkSchema } from '@@/schemas/link'
 import { z } from 'zod'
-import { nanoid } from 'nanoid'
-import { BatchLinkSchema, type BatchLinkItem } from '@@/shared/schemas/link'
 
-// KV 每请求 ops 上限 50,每条 link 占 2 ops(get 查重 + put 写入),保守用 20 条/批
+// 单批次大小:KV 每请求 50 ops 硬上限,每条 link 占 2 ops(get 查重 + put 写入),保守用 20
 const BATCH_SIZE = 20
+// 单次请求总上限:防止 Worker CPU time 超限
+const MAX_LINKS_PER_REQUEST = 500
+
+// 批量请求的 schema:每一项都用 LinkSchema 单独校验(在循环里),这里只校验数组结构
+const BatchPayloadSchema = z.object({
+  links: z.array(z.record(z.any())).min(1).max(MAX_LINKS_PER_REQUEST),
+  onConflict: z.enum(['skip', 'overwrite']).default('skip'),
+})
+
+defineRouteMeta({
+  openAPI: {
+    description: 'Batch create short links (up to 500 per request)',
+    requestBody: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            required: ['links'],
+            properties: {
+              links: {
+                type: 'array',
+                description: 'Array of link objects (same shape as POST /api/link/create body)',
+                items: { type: 'object', required: ['url'], properties: { url: { type: 'string' } } },
+                maxItems: 500,
+              },
+              onConflict: {
+                type: 'string',
+                enum: ['skip', 'overwrite'],
+                default: 'skip',
+                description: 'How to handle slug conflicts with existing links',
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+})
 
 interface SuccessItem {
   row: number
@@ -19,104 +57,117 @@ interface FailureItem {
 }
 
 export default eventHandler(async (event) => {
-  const { caseSensitive, slugRegex, defaultSlugLength } = useRuntimeConfig(event)
-  const { KV } = hubKV ? { KV: hubKV() } : event.context.cloudflare.env  // 兼容两种取 KV 的方式
+  const { caseSensitive } = useRuntimeConfig(event)
+  const { cloudflare } = event.context
+  const { KV } = cloudflare.env
 
-  // 1. 解析 + 校验 body
-  const body = await readValidatedBody(event, BatchLinkSchema.parse)
+  const body = await readValidatedBody(event, BatchPayloadSchema.parse)
 
-  // 2. 取 host,用于拼 shortLink
-  const host = getRequestHost(event, { xForwardedHost: true })
-  const protocol = getRequestProtocol(event, { xForwardedProto: true })
-  const baseUrl = `${protocol}://${host}`
-
-  // 3. 预处理:补 slug、归一化、标记重复
+  // Step 1: 用 LinkSchema 逐条校验 + 补全(slug 自动生成等)
+  // 这一步和单条 create 走完全相同的校验链,字段约束保持一致
+  const prepared: Array<{ link: any, row: number, error?: string }> = []
   const seenSlugsInBatch = new Set<string>()
-  const prepared = body.links.map((item, idx) => {
-    let slug = item.slug?.trim() || ''
-    if (!slug) slug = nanoid(defaultSlugLength || 6)
-    if (!caseSensitive) slug = slug.toLowerCase()
-    return { ...item, slug, _row: idx + 1, _dupInBatch: seenSlugsInBatch.has(slug) ? true : (seenSlugsInBatch.add(slug), false) }
+
+  body.links.forEach((raw, idx) => {
+    const row = idx + 1
+    try {
+      const link = LinkSchema.parse(raw)
+      if (!caseSensitive) link.slug = link.slug.toLowerCase()
+
+      // 批次内 slug 去重(LinkSchema 会自动给 slug,理论上随机生成不会撞,但用户手填可能撞)
+      if (seenSlugsInBatch.has(link.slug)) {
+        prepared.push({ link, row, error: `slug "${link.slug}" duplicated within this batch` })
+        return
+      }
+      seenSlugsInBatch.add(link.slug)
+      prepared.push({ link, row })
+    }
+    catch (e: any) {
+      prepared.push({
+        link: raw,
+        row,
+        error: e?.issues?.[0]?.message || e?.message || 'Validation failed',
+      })
+    }
   })
 
   const succeeded: SuccessItem[] = []
   const failed: FailureItem[] = []
 
-  // 4. 分批处理
-  for (let i = 0; i < prepared.length; i += BATCH_SIZE) {
-    const chunk = prepared.slice(i, i + BATCH_SIZE)
+  // Step 2: 收集校验失败的项,直接进 failed
+  const validItems = prepared.filter((p) => {
+    if (p.error) {
+      failed.push({ row: p.row, url: p.link?.url || '', reason: p.error })
+      return false
+    }
+    return true
+  })
 
-    // 4a. 并发查重
+  // Step 3: 分批查重 + 写入
+  for (let i = 0; i < validItems.length; i += BATCH_SIZE) {
+    const chunk = validItems.slice(i, i + BATCH_SIZE)
+
+    // 3a. 并发查重
     const existsResults = await Promise.all(
-      chunk.map(item =>
-        item._dupInBatch
-          ? Promise.resolve('__DUP_IN_BATCH__')
-          : KV.get(`link:${item.slug}`, { type: 'json' })
-      )
+      chunk.map(({ link }) => KV.get(`link:${link.slug}`)),
     )
 
-    // 4b. 决定写哪些
+    // 3b. 决定写哪些
     const toWrite: typeof chunk = []
     chunk.forEach((item, j) => {
-      const existing = existsResults[j]
-
-      if (existing === '__DUP_IN_BATCH__') {
-        failed.push({ row: item._row, url: item.url, reason: `slug "${item.slug}" duplicated within this batch` })
+      const exists = existsResults[j]
+      if (exists && body.onConflict === 'skip') {
+        failed.push({
+          row: item.row,
+          url: item.link.url,
+          reason: `slug "${item.link.slug}" already exists`,
+        })
         return
       }
-
-      if (existing && body.onConflict === 'skip') {
-        failed.push({ row: item._row, url: item.url, reason: `slug "${item.slug}" already exists` })
-        return
-      }
-
       toWrite.push(item)
     })
 
-    // 4c. 并发写入(每条一次 put)
+    // 3c. 并发写入(每条独立成败,不整体回滚)
     const writeResults = await Promise.allSettled(
-      toWrite.map((item) => {
-        const now = Math.floor(Date.now() / 1000)
-        const link = {
-          id: nanoid(10),
-          url: item.url,
-          slug: item.slug,
-          comment: item.comment || undefined,
-          expiration: item.expiration || undefined,
-          createdAt: now,
-          updatedAt: now,
-        }
-        const opts = item.expiration
-          ? { expiration: item.expiration, metadata: { expiration: item.expiration } }
-          : undefined
-        return KV.put(`link:${item.slug}`, JSON.stringify(link), opts).then(() => link)
-      })
+      toWrite.map(({ link }) => {
+        const expiration = getExpiration(event, link.expiration)
+        return KV.put(`link:${link.slug}`, JSON.stringify(link), {
+          expiration,
+          metadata: {
+            expiration,
+            url: link.url,
+            comment: link.comment,
+          },
+        })
+      }),
     )
 
     writeResults.forEach((res, j) => {
       const item = toWrite[j]
       if (res.status === 'fulfilled') {
         succeeded.push({
-          row: item._row,
-          url: item.url,
-          slug: item.slug,
-          shortLink: `${baseUrl}/${item.slug}`,
+          row: item.row,
+          url: item.link.url,
+          slug: item.link.slug,
+          shortLink: `${getRequestProtocol(event)}://${getRequestHost(event)}/${item.link.slug}`,
         })
-      } else {
+      }
+      else {
         failed.push({
-          row: item._row,
-          url: item.url,
-          reason: res.reason?.message || 'KV write failed',
+          row: item.row,
+          url: item.link.url,
+          reason: (res.reason as Error)?.message || 'KV write failed',
         })
       }
     })
   }
 
-  // 5. 按行号排序,前端展示更直观
   succeeded.sort((a, b) => a.row - b.row)
   failed.sort((a, b) => a.row - b.row)
 
-  setResponseStatus(event, 207)  // 207 Multi-Status,表示部分成功
+  // 207 Multi-Status:语义上正好对应"部分成功"
+  setResponseStatus(event, failed.length === 0 ? 201 : 207)
+
   return {
     total: body.links.length,
     successCount: succeeded.length,
