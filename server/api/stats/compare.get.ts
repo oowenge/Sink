@@ -11,46 +11,92 @@ const CompareQuerySchema = z.object({
 
 type CompareQuery = z.infer<typeof CompareQuerySchema>
 
-function buildSQL(query: CompareQuery, event: H3Event): string {
-  const { dataset } = useRuntimeConfig(event)
+function buildTimeWhere(query: CompareQuery): string {
+  const parts: string[] = []
+  if (query.startAt) parts.push(`timestamp >= toDateTime(${query.startAt})`)
+  if (query.endAt) parts.push(`timestamp <= toDateTime(${query.endAt})`)
+  return parts.length > 0 ? parts.join(' AND ') : '1=1'
+}
 
-  const conditions: string[] = []
-  if (query.startAt) conditions.push(`timestamp >= toDateTime(${query.startAt})`)
-  if (query.endAt) conditions.push(`timestamp <= toDateTime(${query.endAt})`)
-  if (query.country) {
-    const c = query.country.replace(/[^A-Z]/g, '')
-    if (c) conditions.push(`blob6 = '${c}'`)
-  }
-  if (query.slugContains) {
-    const s = query.slugContains.replace(/[^a-zA-Z0-9_-]/g, '')
-    if (s) conditions.push(`blob1 LIKE '%${s}%'`)
-  }
+function sanitizeCountry(c?: string): string {
+  if (!c) return ''
+  return c.replace(/[^A-Z]/g, '')
+}
 
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-
-  const sql = `SELECT blob1 as slug, SUM(_sample_interval) as countryClicks FROM ${dataset} ${where} GROUP BY blob1 ORDER BY countryClicks DESC LIMIT ${query.limit}`
-
-  return sql
+function sanitizeSlugContains(s?: string): string {
+  if (!s) return ''
+  return s.replace(/[^a-zA-Z0-9_-]/g, '')
 }
 
 export default eventHandler(async (event) => {
   const query = await getValidatedQuery(event, CompareQuerySchema.parse)
-  const sql = buildSQL(query, event)
-  console.log('compare SQL:', sql)
+  const { dataset } = useRuntimeConfig(event)
+  const { cloudflare } = event.context
+  const { KV } = cloudflare.env
 
-  const result = await useWAE(event, sql) as any
+  const timeWhere = buildTimeWhere(query)
+  const country = sanitizeCountry(query.country)
+  const slugContains = sanitizeSlugContains(query.slugContains)
 
-  const rows = (result?.data || []).map((r: any) => ({
+  // 主查询:按国家筛选(或全球),统计每个 slug 的点击和 UV
+  const mainConditions = [timeWhere]
+  if (country) mainConditions.push(`blob6 = '${country}'`)
+  if (slugContains) mainConditions.push(`blob1 LIKE '%${slugContains}%'`)
+  const mainWhere = mainConditions.join(' AND ')
+
+  const mainSQL = `SELECT blob1 as slug, SUM(_sample_interval) as clicks, count(DISTINCT blob4) as uv FROM ${dataset} WHERE ${mainWhere} GROUP BY blob1 ORDER BY clicks DESC LIMIT ${query.limit}`
+
+  console.log('compare main SQL:', mainSQL)
+
+  const mainResult = await useWAE(event, mainSQL) as any
+  const mainRows: Array<{ slug: string, clicks: number, uv: number }> = (mainResult?.data || []).map((r: any) => ({
     slug: r.slug,
-    url: '',
-    countryClicks: Number(r.countryClicks) || 0,
-    countryUV: 0,
-    totalClicks: Number(r.countryClicks) || 0,
-    ratio: 1,
+    clicks: Number(r.clicks) || 0,
+    uv: Number(r.uv) || 0,
   }))
 
+  // 总点击查询:对前面筛出来的 slug 在同时间段、不限国家的总点击
+  const slugList = mainRows.map(r => r.slug).filter(s => s)
+  const totalsMap = new Map<string, number>()
+  if (slugList.length > 0) {
+    const slugsIn = slugList.map(s => `'${s.replace(/'/g, '')}'`).join(',')
+    const totalsSQL = `SELECT blob1 as slug, SUM(_sample_interval) as totalClicks FROM ${dataset} WHERE ${timeWhere} AND blob1 IN (${slugsIn}) GROUP BY blob1`
+    console.log('compare totals SQL:', totalsSQL)
+    const totalsResult = await useWAE(event, totalsSQL) as any
+    for (const r of (totalsResult?.data || [])) {
+      totalsMap.set(r.slug, Number(r.totalClicks) || 0)
+    }
+  }
+
+  // 从 KV 并行拉取每个 slug 的 url(用 metadata,比读 value 快)
+  const urlMap = new Map<string, string>()
+  await Promise.all(slugList.map(async (slug) => {
+    try {
+      const { metadata } = await KV.getWithMetadata(`link:${slug}`, { type: 'json' })
+      if (metadata && (metadata as any).url) {
+        urlMap.set(slug, (metadata as any).url)
+      }
+    }
+    catch {
+      // 忽略单个 slug 取失败
+    }
+  }))
+
+  const rows = mainRows.map((r) => {
+    const totalClicks = totalsMap.get(r.slug) ?? r.clicks
+    const ratio = totalClicks > 0 ? r.clicks / totalClicks : 0
+    return {
+      slug: r.slug,
+      url: urlMap.get(r.slug) || '',
+      countryClicks: r.clicks,
+      countryUV: r.uv,
+      totalClicks,
+      ratio,
+    }
+  })
+
   return {
-    country: query.country || null,
+    country: country || null,
     timeRange: { startAt: query.startAt, endAt: query.endAt },
     total: rows.length,
     data: rows,

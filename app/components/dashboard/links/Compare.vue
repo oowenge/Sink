@@ -1,325 +1,327 @@
 <script setup lang="ts">
-import { BarChart3, Copy, Download, ExternalLink, Loader2 } from 'lucide-vue-next'
+import { now } from '@internationalized/date'
 import { toast } from 'vue-sonner'
+
+const COMMON_COUNTRIES = [
+  { code: 'BR', name: '巴西' },
+  { code: 'CN', name: '中国' },
+  { code: 'US', name: '美国' },
+  { code: 'PT', name: '葡萄牙' },
+  { code: 'JP', name: '日本' },
+  { code: 'KR', name: '韩国' },
+  { code: 'TH', name: '泰国' },
+  { code: 'VN', name: '越南' },
+  { code: 'ID', name: '印度尼西亚' },
+  { code: 'MY', name: '马来西亚' },
+  { code: 'SG', name: '新加坡' },
+  { code: 'PH', name: '菲律宾' },
+  { code: 'IN', name: '印度' },
+  { code: 'GB', name: '英国' },
+  { code: 'DE', name: '德国' },
+  { code: 'FR', name: '法国' },
+  { code: 'RU', name: '俄罗斯' },
+  { code: 'MX', name: '墨西哥' },
+  { code: 'AR', name: '阿根廷' },
+  { code: 'CA', name: '加拿大' },
+  { code: 'AU', name: '澳大利亚' },
+]
 
 interface CompareRow {
   slug: string
   url: string
-  totalClicks: number
   countryClicks: number
   countryUV: number
+  totalClicks: number
   ratio: number
 }
 
-interface CompareResult {
+interface CompareResponse {
   country: string | null
+  timeRange: { startAt?: number, endAt?: number }
   total: number
   data: CompareRow[]
 }
 
-// 时间范围预设(秒)
-const TIME_PRESETS = [
-  { label: '过去 24 小时', value: '24h', seconds: 24 * 3600 },
-  { label: '过去 7 天', value: '7d', seconds: 7 * 24 * 3600 },
-  { label: '过去 30 天', value: '30d', seconds: 30 * 24 * 3600 },
-  { label: '过去 90 天', value: '90d', seconds: 90 * 24 * 3600 },
-  { label: '全部时间', value: 'all', seconds: 0 },
-]
+// 时间状态:provide 给 DatePicker
+const time = ref({
+  startAt: date2unix(now().subtract({ days: 7 })),
+  endAt: date2unix(now()),
+})
+provide('time', time)
 
-// 常用国家(可继续加)
-const COMMON_COUNTRIES = [
-  { code: 'BR', name: '巴西 🇧🇷' },
-  { code: 'US', name: '美国 🇺🇸' },
-  { code: 'CN', name: '中国 🇨🇳' },
-  { code: 'JP', name: '日本 🇯🇵' },
-  { code: 'IN', name: '印度 🇮🇳' },
-  { code: 'MX', name: '墨西哥 🇲🇽' },
-  { code: 'ID', name: '印尼 🇮🇩' },
-  { code: 'PH', name: '菲律宾 🇵🇭' },
-  { code: 'VN', name: '越南 🇻🇳' },
-  { code: 'TH', name: '泰国 🇹🇭' },
-  { code: 'AR', name: '阿根廷 🇦🇷' },
-  { code: 'CO', name: '哥伦比亚 🇨🇴' },
-  { code: 'PE', name: '秘鲁 🇵🇪' },
-  { code: 'CL', name: '智利 🇨🇱' },
-]
-
-const timeRange = ref('7d')
-const country = ref('BR') // 默认巴西
+const country = ref('BR')
 const slugContains = ref('')
-const displayLimit = ref('100')
+const displayLimit = ref(100)
 
 const loading = ref(false)
-const result = ref<CompareResult | null>(null)
+const result = ref<CompareResponse | null>(null)
+
+function changeDate(dateRange: [number, number]) {
+  time.value.startAt = dateRange[0]
+  time.value.endAt = dateRange[1]
+  // 时间变化后自动重查
+  submit()
+}
 
 function buildQuery() {
-  const preset = TIME_PRESETS.find(p => p.value === timeRange.value)
-  const now = Math.floor(Date.now() / 1000)
-  const params: Record<string, any> = { limit: displayLimit.value }
-
-  if (preset && preset.seconds > 0) {
-    params.startAt = now - preset.seconds
-    params.endAt = now
+  const params: Record<string, any> = {
+    limit: displayLimit.value,
+    startAt: time.value.startAt,
+    endAt: time.value.endAt,
   }
-if (country.value && country.value !== 'ALL') params.country = country.value
-  if (slugContains.value.trim())
-    params.slugContains = slugContains.value.trim()
-
+  if (country.value && country.value !== 'ALL') params.country = country.value
+  if (slugContains.value.trim()) params.slugContains = slugContains.value.trim()
   return params
 }
 
-async function search() {
+async function submit() {
   loading.value = true
   try {
     const data = await useAPI('/api/stats/compare', {
       query: buildQuery(),
-    }) as CompareResult
+    }) as CompareResponse
     result.value = data
-    if (data.total === 0) {
-      toast.info('没有找到符合条件的数据')
-    }
   }
   catch (err: any) {
-    toast.error(err?.data?.message || err?.message || '查询失败')
+    const msg = err?.data?.message || err?.message || '查询失败'
+    toast.error(msg)
+    result.value = null
   }
   finally {
     loading.value = false
   }
 }
 
-// 打开页面就自动加载默认视图
-onMounted(() => {
-  search()
+const baseUrl = computed(() => {
+  if (typeof window === 'undefined') return ''
+  return window.location.origin
 })
 
-// 当筛选条件变化时,不自动查询(避免每次拉数据),用户点"查询"按钮明确触发
-// 但回车也触发
-function onEnter(e: KeyboardEvent) {
-  if (e.key === 'Enter')
-    search()
-}
-
-
-
-function fmtPct(r: number) {
-  return `${(r * 100).toFixed(1)}%`
-}
-
-// 短链显示
 function shortLink(slug: string) {
-  return `${window.location.origin}/${slug}`
+  return `${baseUrl.value}/${slug}`
 }
 
-// 复制全部短链
-function copyAllShortLinks() {
-  if (!result.value?.data.length)
+function detailHref(slug: string) {
+  return `/dashboard/link?slug=${encodeURIComponent(slug)}`
+}
+
+function copyAllLinks() {
+  if (!result.value?.data?.length) {
+    toast.warning('没有数据可复制')
     return
+  }
   const text = result.value.data.map(r => shortLink(r.slug)).join('\n')
-  navigator.clipboard.writeText(text)
-  toast.success(`已复制 ${result.value.data.length} 条短链`)
+  navigator.clipboard.writeText(text).then(() => {
+    toast.success(`已复制 ${result.value!.data.length} 条短链`)
+  }).catch(() => {
+    toast.error('复制失败')
+  })
 }
 
-// 导出 CSV(包含全部数据)
-function downloadCSV() {
-  if (!result.value?.data.length)
+function exportCSV() {
+  if (!result.value?.data?.length) {
+    toast.warning('没有数据可导出')
     return
-  const cc = result.value.country || 'ALL'
-  const header = `rank,slug,short_link,original_url,${cc}_clicks,${cc}_uv,total_clicks,${cc}_ratio`
-  const rows = result.value.data.map((r, i) =>
-    `${i + 1},${r.slug},${shortLink(r.slug)},"${r.url}",${r.countryClicks},${r.countryUV},${r.totalClicks},${(r.ratio * 100).toFixed(2)}%`,
-  )
-  const csv = [header, ...rows].join('\n')
-  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }) // BOM 让 Excel 识别中文
+  }
+  const header = ['rank', 'slug', 'short_link', 'original_url', 'country_clicks', 'country_uv', 'total_clicks', 'country_ratio']
+  const rows = result.value.data.map((r, i) => [
+    i + 1,
+    r.slug,
+    shortLink(r.slug),
+    r.url || '',
+    r.countryClicks,
+    r.countryUV,
+    r.totalClicks,
+    `${(r.ratio * 100).toFixed(2)}%`,
+  ])
+  const csv = [header, ...rows].map(row => row.map((c) => {
+    const s = String(c)
+    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+      return `"${s.replace(/"/g, '""')}"`
+    }
+    return s
+  }).join(',')).join('\n')
+
+  const bom = '\uFEFF'
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `sink-compare-${cc}-${Date.now()}.csv`
+  a.download = `sink-compare-${country.value || 'ALL'}-${Date.now()}.csv`
+  document.body.appendChild(a)
   a.click()
+  document.body.removeChild(a)
   URL.revokeObjectURL(url)
+  toast.success('已导出 CSV')
 }
+
+const countryLabel = computed(() => {
+  if (!country.value || country.value === 'ALL') return '全球'
+  const c = COMMON_COUNTRIES.find(x => x.code === country.value)
+  return c ? `${c.name} ${c.code}` : country.value
+})
+
+onMounted(() => {
+  submit()
+})
 </script>
 
 <template>
   <div class="space-y-6">
-    <!-- 筛选区 -->
-    <Card>
-      <CardHeader>
-        <CardTitle>数据对比</CardTitle>
-        <CardDescription>
-          按国家、时间筛选,看哪些短链在该地区表现最好。数据来自 Cloudflare Analytics Engine,可能有约 5 分钟延迟。
-        </CardDescription>
-      </CardHeader>
-      <CardContent class="space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <!-- 时间范围 -->
-          <div class="space-y-1">
-            <label class="text-xs text-muted-foreground">时间范围</label>
-            <Select v-model="timeRange">
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="p in TIME_PRESETS" :key="p.value" :value="p.value">
-                  {{ p.label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+    <div>
+      <h1 class="text-2xl font-bold">
+        数据对比
+      </h1>
+      <p class="text-sm text-muted-foreground mt-1">
+        按国家、时间筛选,看哪些短链在该地区表现最好。数据来自 Cloudflare Analytics Engine,可能有约 5 分钟延迟。
+      </p>
+    </div>
 
-          <!-- 国家 -->
-          <div class="space-y-1">
-            <label class="text-xs text-muted-foreground">国家(留空=全球)</label>
-            <Select v-model="country">
-              <SelectTrigger>
-                <SelectValue placeholder="选择国家" />
-              </SelectTrigger>
-<SelectContent>
-  <SelectItem value="ALL">
-    全球(不筛选)
-  </SelectItem>
-  <SelectItem v-for="c in COMMON_COUNTRIES" :key="c.code" :value="c.code">
-    {{ c.name }}
-  </SelectItem>
-</SelectContent>
-            </Select>
-          </div>
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="space-y-2">
+        <label class="text-sm font-medium">时间范围</label>
+        <DashboardDatePicker @update:date-range="changeDate" />
+      </div>
 
-          <!-- slug 模糊匹配 -->
-          <div class="space-y-1">
-            <label class="text-xs text-muted-foreground">slug 包含(可空)</label>
-            <Input v-model="slugContains" placeholder="例如 pubg" @keydown="onEnter" />
-          </div>
+      <div class="space-y-2">
+        <label class="text-sm font-medium">国家(留空=全球)</label>
+        <Select v-model="country">
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">
+              全球(不筛选)
+            </SelectItem>
+            <SelectItem v-for="c in COMMON_COUNTRIES" :key="c.code" :value="c.code">
+              {{ c.name }} {{ c.code }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
-          <!-- 显示前 N 条 -->
-          <div class="space-y-1">
-            <label class="text-xs text-muted-foreground">显示前</label>
-            <Select v-model="displayLimit">
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="50">
-                  50 条
-                </SelectItem>
-                <SelectItem value="100">
-                  100 条
-                </SelectItem>
-                <SelectItem value="200">
-                  200 条
-                </SelectItem>
-                <SelectItem value="500">
-                  500 条
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+      <div class="space-y-2">
+        <label class="text-sm font-medium">slug 包含(可空)</label>
+        <Input v-model="slugContains" placeholder="例如 pubg" />
+      </div>
 
-        <Button :disabled="loading" @click="search">
-          <Loader2 v-if="loading" class="w-4 h-4 mr-2 animate-spin" />
-          查询
-        </Button>
-      </CardContent>
-    </Card>
+      <div class="space-y-2">
+        <label class="text-sm font-medium">显示前</label>
+        <Select v-model="displayLimit">
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem :value="20">
+              20 条
+            </SelectItem>
+            <SelectItem :value="50">
+              50 条
+            </SelectItem>
+            <SelectItem :value="100">
+              100 条
+            </SelectItem>
+            <SelectItem :value="200">
+              200 条
+            </SelectItem>
+            <SelectItem :value="500">
+              500 条
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
 
-    <!-- 结果区 -->
-    <Card v-if="result">
-      <CardHeader>
-        <CardTitle class="flex items-center gap-2">
-          <BarChart3 class="w-5 h-5" />
-          排行榜:{{ result.country || '全球' }} · 共 {{ result.total }} 条
-        </CardTitle>
-      </CardHeader>
-      <CardContent class="space-y-4">
-        <!-- 操作按钮 -->
-        <div class="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" :disabled="!result.total" @click="copyAllShortLinks">
-            <Copy class="w-4 h-4 mr-2" /> 复制全部短链
+    <div class="flex gap-2">
+      <Button :disabled="loading" @click="submit">
+        {{ loading ? '查询中...' : '查询' }}
+      </Button>
+    </div>
+
+    <div v-if="result" class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-xl font-semibold">
+          📊 排行榜:{{ countryLabel }} · 共 {{ result.total }} 条
+        </h2>
+        <div class="flex gap-2">
+          <Button variant="outline" size="sm" :disabled="!result.data.length" @click="copyAllLinks">
+            复制全部短链
           </Button>
-          <Button size="sm" variant="outline" :disabled="!result.total" @click="downloadCSV">
-            <Download class="w-4 h-4 mr-2" /> 导出 CSV
+          <Button variant="outline" size="sm" :disabled="!result.data.length" @click="exportCSV">
+            导出 CSV
           </Button>
         </div>
+      </div>
 
-        <!-- 表格 -->
-        <div v-if="result.total" class="border rounded-md overflow-auto max-h-[600px]">
-          <table class="w-full text-sm">
-            <thead class="bg-muted sticky top-0 z-10">
-              <tr>
-                <th class="text-left p-2 w-12">
-                  排名
-                </th>
-                <th class="text-left p-2">
-                  短链 / 原始 URL
-                </th>
-                <th class="text-right p-2 whitespace-nowrap">
-                  {{ result.country || '全球' }} 点击
-                </th>
-                <th class="text-right p-2 whitespace-nowrap">
-                  {{ result.country || '全球' }} UV
-                </th>
-                <th class="text-right p-2 whitespace-nowrap">
-                  总点击
-                </th>
-                <th class="text-right p-2 whitespace-nowrap">
-                  占比
-                </th>
-                <th class="text-center p-2 w-20">
-                  操作
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(row, idx) in result.data" :key="row.slug" class="border-t hover:bg-muted/30">
-                <td class="p-2 text-muted-foreground font-mono">
-                  {{ idx + 1 }}
-                </td>
-                <td class="p-2 max-w-md">
-                  <a
-                    :href="shortLink(row.slug)"
-                    target="_blank"
-                    class="font-mono text-xs text-primary hover:underline block truncate"
-                    :title="shortLink(row.slug)"
-                  >
+      <div v-if="!result.data.length" class="text-center text-muted-foreground py-12">
+        所选时间和国家范围内没有数据
+      </div>
+
+      <div v-else class="border rounded-md overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-muted/50">
+            <tr>
+              <th class="text-left p-3">
+                排名
+              </th>
+              <th class="text-left p-3">
+                短链 / 原始 URL
+              </th>
+              <th class="text-right p-3">
+                {{ country && country !== 'ALL' ? country : '全球' }} 点击
+              </th>
+              <th class="text-right p-3">
+                {{ country && country !== 'ALL' ? country : '全球' }} UV
+              </th>
+              <th class="text-right p-3">
+                总点击
+              </th>
+              <th class="text-right p-3">
+                占比
+              </th>
+              <th class="text-center p-3">
+                操作
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(row, idx) in result.data" :key="row.slug" class="border-t hover:bg-muted/30">
+              <td class="p-3 font-mono text-xs">
+                {{ idx + 1 }}
+              </td>
+              <td class="p-3">
+                <div>
+                  <a :href="shortLink(row.slug)" target="_blank" class="text-primary hover:underline font-medium">
                     /{{ row.slug }}
                   </a>
-                  <div class="text-xs text-muted-foreground truncate" :title="row.url">
-                    {{ row.url }}
-                  </div>
-                </td>
-                <td class="p-2 text-right font-mono font-medium">
-                  {{ row.countryClicks.toLocaleString() }}
-                </td>
-                <td class="p-2 text-right font-mono text-muted-foreground">
-                  {{ row.countryUV.toLocaleString() }}
-                </td>
-                <td class="p-2 text-right font-mono text-muted-foreground">
-                  {{ row.totalClicks.toLocaleString() }}
-                </td>
-                <td class="p-2 text-right font-mono">
-                  <span :class="row.ratio > 0.5 ? 'text-green-600 font-medium' : 'text-muted-foreground'">
-                    {{ fmtPct(row.ratio) }}
-                  </span>
-                </td>
-                <td class="p-2 text-center">
-                  <NuxtLink
-                    :to="`/dashboard/link?slug=${encodeURIComponent(row.slug)}`"
-                    class="inline-flex items-center justify-center text-muted-foreground hover:text-primary"
-                    title="查看详细分析"
-                  >
-                    <ExternalLink class="w-4 h-4" />
-                  </NuxtLink>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 空状态 -->
-        <div v-else class="py-12 text-center text-muted-foreground">
-          没有数据。试试改变筛选条件或时间范围。
-        </div>
-      </CardContent>
-    </Card>
+                </div>
+                <div v-if="row.url" class="text-xs text-muted-foreground truncate max-w-md mt-0.5" :title="row.url">
+                  {{ row.url }}
+                </div>
+              </td>
+              <td class="p-3 text-right font-mono">
+                {{ row.countryClicks.toLocaleString() }}
+              </td>
+              <td class="p-3 text-right font-mono">
+                {{ row.countryUV.toLocaleString() }}
+              </td>
+              <td class="p-3 text-right font-mono">
+                {{ row.totalClicks.toLocaleString() }}
+              </td>
+              <td class="p-3 text-right font-mono">
+                {{ (row.ratio * 100).toFixed(1) }}%
+              </td>
+              <td class="p-3 text-center">
+                <NuxtLink :to="detailHref(row.slug)">
+                  <Button variant="ghost" size="sm">
+                    详情
+                  </Button>
+                </NuxtLink>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </template>
