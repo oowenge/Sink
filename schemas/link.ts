@@ -22,3 +22,24 @@ export const LinkSchema = z.object({
   description: z.string().trim().max(2048).optional(),
   image: z.string().trim().url().max(2048).optional(),
 })
+// shared/schemas/link.ts —— 在文件末尾追加
+
+import { z } from 'zod'
+
+// 单条批量项:复用 LinkSchema,但所有字段都可选(slug 缺省时自动生成)
+export const BatchLinkItemSchema = z.object({
+  url: z.string().trim().url('Invalid URL'),
+  slug: z.string().trim().regex(slugRegex).optional().or(z.literal('')),
+  comment: z.string().trim().max(2048).optional().or(z.literal('')),
+  expiration: z.number().int().positive().optional(),
+})
+
+export const BatchLinkSchema = z.object({
+  // 最多一次 500 条;超过让用户分两次,避免 Worker CPU 超时
+  links: z.array(BatchLinkItemSchema).min(1).max(500),
+  // 冲突策略:skip = 跳过已存在的 slug;overwrite = 覆盖
+  onConflict: z.enum(['skip', 'overwrite']).default('skip'),
+})
+
+export type BatchLinkItem = z.infer<typeof BatchLinkItemSchema>
+export type BatchLinkPayload = z.infer<typeof BatchLinkSchema>
