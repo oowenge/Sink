@@ -37,7 +37,7 @@ function addTimeRule() {
     {
       id: genId(),
       type: 'time',
-      tz: 'Asia/Kuala_Lumpur',
+      tz: 'America/Sao_Paulo',
       windows: [{ start: '09:00', end: '18:00' }],
       url: '',
     },
