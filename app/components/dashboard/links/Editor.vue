@@ -282,12 +282,13 @@ async function onSubmit() {
               </p>
             </div>
 
-            <!-- 跳转规则(下个 batch 填充) -->
+            <!-- 跳转规则 -->
             <div class="space-y-2">
               <Label>跳转规则</Label>
-              <div class="rounded border border-dashed p-4 text-center text-xs text-muted-foreground">
-                跳转规则编辑器(地理定向 / 时间段 / A/B 测试)即将上线
-              </div>
+              <p class="text-xs text-muted-foreground">
+                高级功能:可让短链根据国家、时间段或 A/B 权重跳转到不同 URL。规则按从上到下顺序匹配。
+              </p>
+              <DashboardLinksRulesEditor v-model="form.rules" />
             </div>
           </div>
         </div>
