@@ -68,7 +68,7 @@ export default eventHandler(async (event) => {
   const prepared: Array<{ link: any, row: number, error?: string }> = []
   const seenSlugsInBatch = new Set<string>()
 
-// Day 2: 当前登录用户(由 server/middleware/2.auth.ts 注入)
+  // Day 2: 当前登录用户(由 server/middleware/2.auth.ts 注入)
   const currentUser = (event.context as any).user
   const ownerUsername = currentUser?.username
 
@@ -84,7 +84,7 @@ export default eventHandler(async (event) => {
         (link as any).owner = ownerUsername
       }
 
-      // 批次内 slug 去重(LinkSchema 会自动给 slug,理论上随机生成不会撞,但用户手填可能撞)
+      // 批次内 slug 去重
       if (seenSlugsInBatch.has(link.slug)) {
         prepared.push({ link, row, error: `slug "${link.slug}" duplicated within this batch` })
         return
@@ -93,7 +93,6 @@ export default eventHandler(async (event) => {
       prepared.push({ link, row })
     }
     catch (e: any) {
-      // zod ZodError 有 .issues 数组,每条 issue 有 path 和 message
       const firstIssue = e?.issues?.[0]
       const errorMsg = firstIssue
         ? `${firstIssue.path?.join('.') || 'field'}: ${firstIssue.message}`
@@ -181,8 +180,9 @@ export default eventHandler(async (event) => {
       }
     })
 
-    // 等所有 D1 写完(并发,内部已捕获错误)
+    // 等这一批的所有 D1 写完(并发,内部已捕获错误)
     await Promise.all(d1Promises)
+  }
 
   succeeded.sort((a, b) => a.row - b.row)
   failed.sort((a, b) => a.row - b.row)
