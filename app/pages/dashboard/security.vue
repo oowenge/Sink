@@ -18,6 +18,7 @@ definePageMeta({
       <DashboardSecurityLockedUsers />
       <DashboardSecurityBlocklist />
       <DashboardSecurityAllowlist class="lg:col-span-2" />
+      <DashboardSecurityAuditLogs />
     </div>
   </main>
 </template>
