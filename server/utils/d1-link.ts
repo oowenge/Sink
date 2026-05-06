@@ -125,3 +125,20 @@ export function d1RowToLink(row: any): LinkRecord {
   }
   return link
 }
+/**
+ * 仅更新 last_accessed_at 字段(用于跳转跟踪)
+ * 不影响 link 其他数据
+ */
+export async function updateLastAccessedAt(event: any, slug: string, ts: number): Promise<void> {
+  const DB = getDB(event)
+  if (!DB) return
+
+  try {
+    await DB.prepare('UPDATE links SET last_accessed_at = ? WHERE slug = ?')
+      .bind(ts, slug)
+      .run()
+  }
+  catch (err: any) {
+    console.error('[d1-link] update last_accessed_at 失败:', slug, err?.message)
+  }
+}

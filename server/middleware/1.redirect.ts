@@ -2,8 +2,53 @@ import type { LinkSchema } from '@@/schemas/link'
 import type { z } from 'zod'
 import { parsePath, withQuery } from 'ufo'
 
+// 一天的秒数(用于判断 lastAccessedAt 是否需要更新)
+const ONE_DAY_SECONDS = 24 * 60 * 60
+
+/**
+ * 判断 lastAccessedAt 是否在"今天 UTC"
+ * 同一 UTC 日期内只更新一次,避免高频写入
+ */
+function isSameUtcDay(ts1: number, ts2: number): boolean {
+  if (!ts1 || !ts2) return false
+  const day1 = Math.floor(ts1 / ONE_DAY_SECONDS)
+  const day2 = Math.floor(ts2 / ONE_DAY_SECONDS)
+  return day1 === day2
+}
+
+/**
+ * 异步更新 lastAccessedAt 到 KV + D1
+ * 用 event.waitUntil 在后台执行,不阻塞跳转响应
+ */
+async function updateAccessTime(
+  event: any,
+  link: any,
+  KV: any,
+  now: number,
+): Promise<void> {
+  try {
+    // 更新 KV(写完整 link 对象,只改 lastAccessedAt)
+    const updated = { ...link, lastAccessedAt: now }
+    const expiration = link.expiration && link.expiration > now ? link.expiration : undefined
+    await KV.put(`link:${link.slug}`, JSON.stringify(updated), {
+      expiration,
+      metadata: {
+        expiration,
+        url: link.url,
+        comment: link.comment,
+      },
+    })
+
+    // 更新 D1(只改一个字段,效率高)
+    await updateLastAccessedAt(event, link.slug, now)
+  }
+  catch (err: any) {
+    console.error('[redirect] updateAccessTime 失败:', link?.slug, err?.message)
+  }
+}
+
 export default eventHandler(async (event) => {
-  const { pathname: slug } = parsePath(event.path.replace(/^\/|\/$/g, '')) // remove leading and trailing slashes
+  const { pathname: slug } = parsePath(event.path.replace(/^\/|\/$/g, ''))
   const { slugRegex, reserveSlug } = useAppConfig(event)
   const { homeURL, linkCacheTtl, redirectWithQuery, caseSensitive } = useRuntimeConfig(event)
   const { cloudflare } = event.context
@@ -29,7 +74,7 @@ export default eventHandler(async (event) => {
     }
 
     if (link) {
-      // 规则引擎: 检查 rules 数组,命中则替换 url
+      // 规则引擎
       let targetUrl = link.url
       let matchedRule: { ruleId: string, ruleType: string, variantIndex?: number } | null = null
 
@@ -47,20 +92,40 @@ export default eventHandler(async (event) => {
         }
       }
 
-      // 把命中规则信息挂到 event.context,access-log 可读
       event.context.link = link
       event.context.matchedRule = matchedRule
       event.context.resolvedUrl = targetUrl
 
+      // 写访问日志(原有)
       try {
         await useAccessLog(event)
       }
       catch (error) {
         console.error('Failed write access log:', error)
       }
+
+      // 更新 lastAccessedAt(每天最多 1 次,后台异步,不阻塞跳转)
+      try {
+        const now = Math.floor(Date.now() / 1000)
+        const lastAt = (link as any).lastAccessedAt
+        if (!lastAt || !isSameUtcDay(lastAt, now)) {
+          // 用 waitUntil 让任务在响应后继续执行,不影响用户感知速度
+          const waitUntil = (event.context.cloudflare as any)?.context?.waitUntil
+          if (typeof waitUntil === 'function') {
+            waitUntil(updateAccessTime(event, link, KV, now))
+          }
+          else {
+            // 没有 waitUntil 可用时,fire-and-forget(不 await)
+            updateAccessTime(event, link, KV, now).catch(() => {})
+          }
+        }
+      }
+      catch (err: any) {
+        console.error('[redirect] lastAccessedAt 检查失败:', err?.message)
+      }
+
+      // 决定状态码
       const target = redirectWithQuery ? withQuery(targetUrl, getQuery(event)) : targetUrl
-      // 有规则时强制使用 302(防浏览器/CDN 缓存,每次重新计算规则)
-      // 无规则时用配置的状态码(默认 301,性能更好)
       const hasRules = Array.isArray(rules) && rules.length > 0
       const statusCode = hasRules ? 302 : +useRuntimeConfig(event).redirectStatusCode
       return sendRedirect(event, target, statusCode)
