@@ -10,6 +10,32 @@ const password = ref('')
 const token = ref('')
 const submitting = ref(false)
 
+// 限流提示状态
+const lockoutMessage = ref('')   // 锁定提示文字
+const remainingAttempts = ref(null)  // 剩余尝试次数
+const lockoutCountdown = ref(0)  // 倒计时秒数
+let countdownTimer = null
+
+function startCountdown(seconds) {
+  lockoutCountdown.value = seconds
+  if (countdownTimer) clearInterval(countdownTimer)
+  countdownTimer = setInterval(() => {
+    lockoutCountdown.value--
+    if (lockoutCountdown.value <= 0) {
+      clearInterval(countdownTimer)
+      countdownTimer = null
+      lockoutMessage.value = ''
+    }
+  }, 1000)
+}
+
+function formatCountdown(seconds) {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  if (m > 0) return `${m} 分 ${s} 秒`
+  return `${s} 秒`
+}
+
 async function loginByUser() {
   if (!username.value.trim() || !password.value) {
     toast.error('请输入用户名和密码')
@@ -28,14 +54,34 @@ async function loginByUser() {
     localStorage.setItem('SinkSiteToken', data.token)
     localStorage.setItem('SinkUsername', data.username)
     localStorage.setItem('SinkUserRole', data.role)
+    // 登录成功清除限流提示
+    lockoutMessage.value = ''
+    remainingAttempts.value = null
     toast.success(`欢迎回来,${data.username}`)
     await navigateTo('/dashboard')
   }
   catch (e) {
     console.error(e)
-    toast.error('登录失败', {
-      description: e?.data?.message || e?.message || '请检查用户名和密码',
-    })
+    const errData = e?.data?.data || {}
+    const errMessage = e?.data?.message || e?.message || '请检查用户名和密码'
+
+    // 处理账号锁定
+    if (errData.locked && errData.remainingSeconds) {
+      lockoutMessage.value = errMessage
+      startCountdown(errData.remainingSeconds)
+      toast.error('账号已锁定', { description: errMessage })
+    }
+    // 处理普通失败带剩余次数
+    else if (typeof errData.remaining === 'number') {
+      remainingAttempts.value = errData.remaining
+      lockoutMessage.value = ''
+      toast.error('登录失败', { description: errMessage })
+    }
+    // IP 封禁等其他情况
+    else {
+      lockoutMessage.value = errMessage
+      toast.error('登录失败', { description: errMessage })
+    }
   }
   finally {
     submitting.value = false
@@ -74,6 +120,10 @@ function handleKeydown(e) {
     else loginByToken()
   }
 }
+
+onUnmounted(() => {
+  if (countdownTimer) clearInterval(countdownTimer)
+})
 </script>
 
 <template>
@@ -88,6 +138,26 @@ function handleKeydown(e) {
       </CardDescription>
     </CardHeader>
     <CardContent class="grid gap-4">
+      <!-- 锁定/封禁警告 -->
+      <Alert v-if="lockoutMessage" variant="destructive">
+        <AlertCircle class="w-4 h-4" />
+        <AlertTitle>登录受限</AlertTitle>
+        <AlertDescription>
+          <div>{{ lockoutMessage }}</div>
+          <div v-if="lockoutCountdown > 0" class="mt-1 font-mono">
+            剩余: {{ formatCountdown(lockoutCountdown) }}
+          </div>
+        </AlertDescription>
+      </Alert>
+
+      <!-- 剩余尝试次数提示 -->
+      <Alert v-if="remainingAttempts !== null && remainingAttempts > 0 && !lockoutMessage">
+        <AlertCircle class="w-4 h-4" />
+        <AlertDescription>
+          密码错误,还可尝试 <strong>{{ remainingAttempts }}</strong> 次,失败后账号将锁定 5 分钟
+        </AlertDescription>
+      </Alert>
+
       <!-- 用户名密码登录 -->
       <div v-if="mode === 'user'" class="space-y-4">
         <div class="space-y-2">
@@ -99,7 +169,7 @@ function handleKeydown(e) {
               v-model="username"
               placeholder="例如 owen"
               class="pl-9"
-              :disabled="submitting"
+              :disabled="submitting || lockoutCountdown > 0"
               @keydown="handleKeydown"
             />
           </div>
@@ -114,13 +184,13 @@ function handleKeydown(e) {
               type="password"
               placeholder="********"
               class="pl-9"
-              :disabled="submitting"
+              :disabled="submitting || lockoutCountdown > 0"
               @keydown="handleKeydown"
             />
           </div>
         </div>
-        <Button class="w-full" :disabled="submitting" @click="loginByUser">
-          {{ submitting ? '登录中...' : '登录' }}
+        <Button class="w-full" :disabled="submitting || lockoutCountdown > 0" @click="loginByUser">
+          {{ submitting ? '登录中...' : (lockoutCountdown > 0 ? '已锁定' : '登录') }}
         </Button>
       </div>
 
