@@ -29,14 +29,36 @@ export default eventHandler(async (event) => {
     }
 
     if (link) {
+      // 规则引擎: 检查 rules 数组,命中则替换 url
+      let targetUrl = link.url
+      let matchedRule: { ruleId: string, ruleType: string, variantIndex?: number } | null = null
+
+      const rules = (link as any).rules
+      if (Array.isArray(rules) && rules.length > 0) {
+        const country = (event.context.cloudflare?.request?.cf as any)?.country
+        const matched = matchRules(rules, { country, now: new Date() })
+        if (matched) {
+          targetUrl = matched.url
+          matchedRule = {
+            ruleId: matched.ruleId,
+            ruleType: matched.ruleType,
+            variantIndex: matched.variantIndex,
+          }
+        }
+      }
+
+      // 把命中规则信息挂到 event.context,access-log 可读
       event.context.link = link
+      event.context.matchedRule = matchedRule
+      event.context.resolvedUrl = targetUrl
+
       try {
         await useAccessLog(event)
       }
       catch (error) {
         console.error('Failed write access log:', error)
       }
-      const target = redirectWithQuery ? withQuery(link.url, getQuery(event)) : link.url
+      const target = redirectWithQuery ? withQuery(targetUrl, getQuery(event)) : targetUrl
       return sendRedirect(event, target, +useRuntimeConfig(event).redirectStatusCode)
     }
   }

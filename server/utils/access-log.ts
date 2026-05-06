@@ -35,6 +35,9 @@ export const blobsMap = {
   blob14: 'device',
   blob15: 'deviceType',
   blob16: 'COLO',
+  blob17: 'ruleId',     // 命中的规则 id(无规则命中为空)
+  blob18: 'ruleType',   // country/time/ab/(空)
+  blob19: 'variantIdx', // ab 规则才有,命中第几个 variant
 } as const
 
 export const doublesMap = {
@@ -112,6 +115,8 @@ export function useAccessLog(event: H3Event) {
 
   const { request: { cf } } = event.context.cloudflare
   const link = event.context.link || {}
+  const matchedRule = event.context.matchedRule || null
+  const resolvedUrl = event.context.resolvedUrl || link.url
 
   const isBot = cf?.botManagement?.verifiedBot
     || ['crawler', 'fetcher'].includes(uaInfo?.browser?.type || '')
@@ -126,7 +131,7 @@ export function useAccessLog(event: H3Event) {
   const regionNames = new Intl.DisplayNames(['en'], { type: 'region' })
   const countryName = regionNames.of(cf?.country || 'WD') // fallback to "Worldwide"
   const accessLogs = {
-    url: link.url,
+    url: resolvedUrl, // 记录实际跳转的 url(可能是规则命中后的)
     slug: link.slug,
     ua: userAgent,
     ip,
@@ -142,6 +147,11 @@ export function useAccessLog(event: H3Event) {
     device: uaInfo?.device?.model,
     deviceType: uaInfo?.device?.type,
     COLO: cf?.colo,
+
+    // 规则匹配信息
+    ruleId: matchedRule?.ruleId || '',
+    ruleType: matchedRule?.ruleType || '',
+    variantIdx: matchedRule?.variantIndex !== undefined ? String(matchedRule.variantIndex) : '',
 
     // For RealTime Globe
     latitude: Number(cf?.latitude || getHeader(event, 'cf-iplatitude') || 0),
