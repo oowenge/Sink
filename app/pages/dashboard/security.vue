@@ -1,4 +1,6 @@
 <script setup>
+import { Snowflake } from 'lucide-vue-next'
+
 definePageMeta({
   middleware: 'admin-only',
 })
@@ -8,9 +10,17 @@ definePageMeta({
   <main class="space-y-6">
     <DashboardBreadcrumb title="安全中心" />
 
-    <h1 class="text-2xl font-bold">
-      安全中心
-    </h1>
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold">
+        安全中心
+      </h1>
+      <NuxtLink to="/dashboard/cold-links">
+        <Button variant="outline" size="sm">
+          <Snowflake class="w-4 h-4 mr-2" />
+          冷链接清理
+        </Button>
+      </NuxtLink>
+    </div>
 
     <DashboardSecurityStatus />
 
