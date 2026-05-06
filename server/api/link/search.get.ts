@@ -5,14 +5,60 @@ interface Link {
 }
 
 // 单次 KV.list 拿多少 keys
-// 控制在 30 以内,避免单批 KV.getWithMetadata 并发超过 Workers 限制
 const KV_PAGE_SIZE = 30
-// 整个扫描最大页数:30 * 50 = 1500 条 keys 上限
+// 整个扫描最大页数
 const MAX_PAGES = 50
 
 export default eventHandler(async (event) => {
-  // Day 4: 拿当前用户用于过滤
   const currentUser = requireAuth(event)
+  const { cloudflare } = event.context
+  const useD1 = (cloudflare?.env as any)?.USE_D1_QUERY === 'true'
+
+  if (useD1) {
+    return searchFromD1(event, currentUser)
+  }
+
+  return searchFromKV(event, currentUser)
+})
+
+// ============ D1 实现 ============
+async function searchFromD1(event: any, currentUser: any): Promise<Link[]> {
+  const DB = (event.context as any)?.cloudflare?.env?.DB
+  if (!DB) {
+    console.error('[search] D1 binding 不存在,退回 KV')
+    return searchFromKV(event, currentUser)
+  }
+
+  const isAdmin = currentUser.role === 'admin'
+
+  try {
+    let result
+    if (isAdmin) {
+      result = await DB.prepare(
+        'SELECT slug, url, comment FROM links ORDER BY created_at DESC',
+      ).all()
+    }
+    else {
+      result = await DB.prepare(
+        'SELECT slug, url, comment FROM links WHERE owner = ? ORDER BY created_at DESC',
+      ).bind(currentUser.username).all()
+    }
+
+    const rows = result?.results || []
+    return rows.map((r: any) => ({
+      slug: r.slug,
+      url: r.url,
+      comment: r.comment || undefined,
+    }))
+  }
+  catch (err: any) {
+    console.error('[search] D1 查询失败,退回 KV:', err?.message)
+    return searchFromKV(event, currentUser)
+  }
+}
+
+// ============ 旧 KV 实现 (兜底) ============
+async function searchFromKV(event: any, currentUser: any): Promise<Link[]> {
   const isAdmin = currentUser.role === 'admin'
   const { cloudflare } = event.context
   const { KV } = cloudflare.env
@@ -31,29 +77,24 @@ export default eventHandler(async (event) => {
       const { keys, list_complete, cursor: nextCursor } = await KV.list(listOptions)
 
       if (Array.isArray(keys) && keys.length > 0) {
-        // 这一批的 keys 并发处理(每批最多 30 条,在 Workers 并发限制内)
         const batchResults = await Promise.all(keys.map(async (key) => {
           try {
-            // admin + metadata 完整 → 走快路径
-            if (isAdmin && key.metadata?.url) {
+            if (isAdmin && (key as any).metadata?.url) {
               return {
                 slug: key.name.replace('link:', ''),
-                url: (key.metadata as any).url,
-                comment: (key.metadata as any).comment,
+                url: (key as any).metadata.url,
+                comment: (key as any).metadata.comment,
               } as Link
             }
 
-            // user 或 metadata 不全:必须 KV.get 取 link 对象
             const { metadata, value: link } = await KV.getWithMetadata(key.name, { type: 'json' })
             if (!link) return null
 
-            // Day 4: 权限过滤
             if (!isAdmin && (link as any).owner !== currentUser.username) {
               return null
             }
 
-            // Forward compatible: 给老链接补 metadata
-            if (!key.metadata?.url) {
+            if (!(key as any).metadata?.url) {
               await KV.put(key.name, JSON.stringify(link), {
                 expiration: (metadata as any)?.expiration,
                 metadata: {
@@ -76,7 +117,6 @@ export default eventHandler(async (event) => {
           }
         }))
 
-        // 把这一批的结果加进总列表
         for (const item of batchResults) {
           if (item) list.push(item)
         }
@@ -98,4 +138,4 @@ export default eventHandler(async (event) => {
       message: 'Failed to fetch link list',
     })
   }
-})
+}
