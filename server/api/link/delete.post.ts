@@ -15,7 +15,6 @@ export default eventHandler(async (event) => {
     const { KV } = cloudflare.env
 
     // Day 4: 先取出链接,检查权限
-    // 没找到的链接直接 404,有但没权限的也返回 404(防枚举)
     const existing = await KV.get(`link:${slug}`, { type: 'json' })
     if (!existing) {
       throw createError({
@@ -30,6 +29,10 @@ export default eventHandler(async (event) => {
       })
     }
 
+    // Step 1: 删 KV
     await KV.delete(`link:${slug}`)
+
+    // Step 2: 删 D1 (失败仅记 log)
+    await deleteLinkFromD1(event, slug)
   }
 })

@@ -17,8 +17,7 @@ export default eventHandler(async (event) => {
   const { KV } = cloudflare.env
   const existingLink: z.infer<typeof LinkSchema> | null = await KV.get(`link:${link.slug}`, { type: 'json' })
   if (existingLink) {
-    // Day 4: 权限检查 - user 不能编辑别人的链接
-    // 假装不存在(返回 404 而不是 403,防枚举)
+    // Day 4: 权限检查
     if (!canAccessLink(currentUser, existingLink)) {
       throw createError({
         status: 404,
@@ -26,24 +25,24 @@ export default eventHandler(async (event) => {
       })
     }
 
-    // Day 2: owner 字段是后端管理的,不允许通过编辑接口修改
-    // 即使前端提交了 owner,也无视它,保留原 owner
+    // Day 2: 强制保留原 owner
     const existingOwner = (existingLink as any).owner
 
     const newLink = {
       ...existingLink,
       ...link,
-      id: existingLink.id, // don't update id
-      createdAt: existingLink.createdAt, // don't update createdAt
+      id: existingLink.id,
+      createdAt: existingLink.createdAt,
       updatedAt: Math.floor(Date.now() / 1000),
     }
 
-    // Day 2: 强制保留原 owner(在 spread 之后覆盖)
     if (existingOwner) {
       (newLink as any).owner = existingOwner
     }
 
     const expiration = getExpiration(event, newLink.expiration)
+
+    // Step 1: 写 KV
     await KV.put(`link:${newLink.slug}`, JSON.stringify(newLink), {
       expiration,
       metadata: {
@@ -52,12 +51,15 @@ export default eventHandler(async (event) => {
         comment: newLink.comment,
       },
     })
+
+    // Step 2: 写 D1 镜像
+    await upsertLinkToD1(event, newLink as any)
+
     setResponseStatus(event, 201)
     const shortLink = `${getRequestProtocol(event)}://${getRequestHost(event)}/${newLink.slug}`
     return { link: newLink, shortLink }
   }
 
-  // 链接不存在
   throw createError({
     status: 404,
     statusText: 'Not Found',

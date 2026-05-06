@@ -7,7 +7,6 @@ defineRouteMeta({
       required: true,
       content: {
         'application/json': {
-          // Need: https://github.com/nitrojs/nitro/issues/2974
           schema: {
             type: 'object',
             required: ['url'],
@@ -29,7 +28,6 @@ export default eventHandler(async (event) => {
   const { caseSensitive } = useRuntimeConfig(event)
 
   // Day 2: 写入当前登录用户为 owner
-  // event.context.user 由 server/middleware/2.auth.ts 注入
   const user = (event.context as any).user
   if (user?.username) {
     (link as any).owner = user.username
@@ -44,24 +42,27 @@ export default eventHandler(async (event) => {
   const existingLink = await KV.get(`link:${link.slug}`)
   if (existingLink) {
     throw createError({
-      status: 409, // Conflict
+      status: 409,
       statusText: 'Link already exists',
     })
   }
 
-  else {
-    const expiration = getExpiration(event, link.expiration)
+  const expiration = getExpiration(event, link.expiration)
 
-    await KV.put(`link:${link.slug}`, JSON.stringify(link), {
+  // Step 1: 写 KV (source of truth,失败则整个请求失败)
+  await KV.put(`link:${link.slug}`, JSON.stringify(link), {
+    expiration,
+    metadata: {
       expiration,
-      metadata: {
-        expiration,
-        url: link.url,
-        comment: link.comment,
-      },
-    })
-    setResponseStatus(event, 201)
-    const shortLink = `${getRequestProtocol(event)}://${getRequestHost(event)}/${link.slug}`
-    return { link, shortLink }
-  }
+      url: link.url,
+      comment: link.comment,
+    },
+  })
+
+  // Step 2: 写 D1 镜像 (失败仅记 log,不影响响应)
+  await upsertLinkToD1(event, link as any)
+
+  setResponseStatus(event, 201)
+  const shortLink = `${getRequestProtocol(event)}://${getRequestHost(event)}/${link.slug}`
+  return { link, shortLink }
 })
