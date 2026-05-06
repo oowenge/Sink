@@ -104,24 +104,17 @@ export default eventHandler(async (event) => {
         console.error('Failed write access log:', error)
       }
 
-      // 更新 lastAccessedAt(每天最多 1 次,后台异步,不阻塞跳转)
+      // 更新 lastAccessedAt(每天最多 1 次,直接 await 保证执行)
       try {
         const now = Math.floor(Date.now() / 1000)
         const lastAt = (link as any).lastAccessedAt
         if (!lastAt || !isSameUtcDay(lastAt, now)) {
-          // 用 waitUntil 让任务在响应后继续执行,不影响用户感知速度
-          const waitUntil = (event.context.cloudflare as any)?.context?.waitUntil
-          if (typeof waitUntil === 'function') {
-            waitUntil(updateAccessTime(event, link, KV, now))
-          }
-          else {
-            // 没有 waitUntil 可用时,fire-and-forget(不 await)
-            updateAccessTime(event, link, KV, now).catch(() => {})
-          }
+          console.log('[redirect] 更新 lastAccessedAt:', link.slug, 'old=', lastAt, 'new=', now)
+          await updateAccessTime(event, link, KV, now)
         }
       }
       catch (err: any) {
-        console.error('[redirect] lastAccessedAt 检查失败:', err?.message)
+        console.error('[redirect] lastAccessedAt 更新失败:', err?.message)
       }
 
       // 决定状态码
