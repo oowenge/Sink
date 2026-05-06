@@ -13,6 +13,7 @@ export default eventHandler(async (event) => {
 
   const { cloudflare } = event.context
   const { KV } = cloudflare.env
+
   // Check if link exists
   const existingLink = await KV.get(`link:${link.slug}`, { type: 'json' })
   if (existingLink) {
@@ -28,6 +29,8 @@ export default eventHandler(async (event) => {
 
   // If link doesn't exist, create it
   const expiration = getExpiration(event, link.expiration)
+
+  // Step 1: 写 KV (source of truth)
   await KV.put(`link:${link.slug}`, JSON.stringify(link), {
     expiration,
     metadata: {
@@ -36,6 +39,10 @@ export default eventHandler(async (event) => {
       comment: link.comment,
     },
   })
+
+  // Step 2: 写 D1 镜像 (失败仅记 log)
+  await upsertLinkToD1(event, link as any)
+
   setResponseStatus(event, 201)
   const shortLink = `${getRequestProtocol(event)}://${getRequestHost(event)}/${link.slug}`
   return { link, shortLink, status: 'created' }

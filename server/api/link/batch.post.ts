@@ -142,7 +142,7 @@ export default eventHandler(async (event) => {
       toWrite.push(item)
     })
 
-    // 3c. 并发写入(每条独立成败,不整体回滚)
+    // 3c. 并发写 KV(每条独立成败,不整体回滚)
     const writeResults = await Promise.allSettled(
       toWrite.map(({ link }) => {
         const expiration = getExpiration(event, link.expiration)
@@ -157,6 +157,9 @@ export default eventHandler(async (event) => {
       }),
     )
 
+    // 3d. KV 成功的同步到 D1(失败仅记 log,不影响响应)
+    const d1Promises: Promise<void>[] = []
+
     writeResults.forEach((res, j) => {
       const item = toWrite[j]
       if (res.status === 'fulfilled') {
@@ -166,6 +169,8 @@ export default eventHandler(async (event) => {
           slug: item.link.slug,
           shortLink: `${getRequestProtocol(event)}://${getRequestHost(event)}/${item.link.slug}`,
         })
+        // 成功的链接同步到 D1
+        d1Promises.push(upsertLinkToD1(event, item.link))
       }
       else {
         failed.push({
@@ -175,7 +180,9 @@ export default eventHandler(async (event) => {
         })
       }
     })
-  }
+
+    // 等所有 D1 写完(并发,内部已捕获错误)
+    await Promise.all(d1Promises)
 
   succeeded.sort((a, b) => a.row - b.row)
   failed.sort((a, b) => a.row - b.row)
