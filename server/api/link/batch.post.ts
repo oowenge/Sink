@@ -187,6 +187,9 @@ export default eventHandler(async (event) => {
   succeeded.sort((a, b) => a.row - b.row)
   failed.sort((a, b) => a.row - b.row)
 
+  // 写一条批量审计日志
+  await writeBatchAuditLog(event, succeeded.map(s => ({ slug: s.slug, url: s.url })), failed.length)
+
   // 207 Multi-Status:语义上正好对应"部分成功"
   setResponseStatus(event, failed.length === 0 ? 201 : 207)
 

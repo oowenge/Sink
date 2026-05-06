@@ -34,5 +34,13 @@ export default eventHandler(async (event) => {
 
     // Step 2: 删 D1 (失败仅记 log)
     await deleteLinkFromD1(event, slug)
+
+    // Step 3: 写审计日志
+    await writeAuditLog(event, {
+      action: 'delete',
+      targetSlug: slug,
+      targetUrl: (existing as any).url,
+      oldRules: (existing as any).rules,
+    })
   }
 })

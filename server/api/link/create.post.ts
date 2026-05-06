@@ -62,6 +62,14 @@ export default eventHandler(async (event) => {
   // Step 2: 写 D1 镜像 (失败仅记 log,不影响响应)
   await upsertLinkToD1(event, link as any)
 
+  // Step 3: 写审计日志
+  await writeAuditLog(event, {
+    action: 'create',
+    targetSlug: link.slug,
+    targetUrl: link.url,
+    newRules: (link as any).rules,
+  })
+
   setResponseStatus(event, 201)
   const shortLink = `${getRequestProtocol(event)}://${getRequestHost(event)}/${link.slug}`
   return { link, shortLink }
