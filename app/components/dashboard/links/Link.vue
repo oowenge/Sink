@@ -1,6 +1,6 @@
 <script setup>
 import { useClipboard } from '@vueuse/core'
-import { CalendarPlus2, Copy, CopyCheck, Eraser, Hourglass, Link as LinkIcon, QrCode, SquareChevronDown, SquarePen } from 'lucide-vue-next'
+import { CalendarPlus2, Copy, CopyCheck, Eraser, Hourglass, Link as LinkIcon, QrCode, SquareChevronDown, SquarePen, Zap } from 'lucide-vue-next'
 import { parseURL } from 'ufo'
 import { toast } from 'vue-sonner'
 import QRCode from './QRCode.vue'
@@ -25,7 +25,27 @@ function getLinkHost(url) {
 
 const shortLink = computed(() => `${origin}/${props.link.slug}`)
 const linkIcon = computed(() => `https://www.google.com/s2/favicons?sz=64&domain=${getLinkHost(props.link.url)}`)
+// 规则统计:有规则就在卡片底部显示徽章
+const rulesSummary = computed(() => {
+  const rules = props.link.rules
+  if (!Array.isArray(rules) || rules.length === 0) return null
 
+  const counts = { country: 0, time: 0, ab: 0 }
+  for (const r of rules) {
+    if (r.type in counts) counts[r.type]++
+  }
+
+  const parts = []
+  if (counts.country) parts.push(`地理 ×${counts.country}`)
+  if (counts.time) parts.push(`时间 ×${counts.time}`)
+  if (counts.ab) parts.push(`A/B ×${counts.ab}`)
+
+  return {
+    total: rules.length,
+    label: parts.join(' · '),
+    counts,
+  }
+})
 const { copy, copied } = useClipboard({ source: shortLink.value, copiedDuring: 400 })
 
 function updateLink(link, type) {
@@ -188,6 +208,23 @@ function copyLink() {
         </template>
         <Separator orientation="vertical" />
         <span class="truncate">{{ link.url }}</span>
+        <template v-if="rulesSummary">
+          <Separator orientation="vertical" />
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <span class="inline-flex items-center leading-5 whitespace-nowrap text-primary">
+                  <Zap class="w-4 h-4 mr-1" />
+                  {{ rulesSummary.label }}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>已配置 {{ rulesSummary.total }} 条跳转规则</p>
+                <p class="text-xs text-muted-foreground mt-1">点击编辑查看详情</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </template>
       </div>
     </NuxtLink>
   </Card>
