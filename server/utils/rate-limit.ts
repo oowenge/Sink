@@ -13,7 +13,7 @@ import type { H3Event } from 'h3'
 
 export const USER_LOCK_THRESHOLD = 3 // 同 username 失败几次后锁
 export const USER_LOCK_DURATION = 5 * 60 // 5 分钟(秒)
-export const IP_BLOCK_THRESHOLD = 50 // 同 IP 失败几次后永久封禁
+export const IP_BLOCK_THRESHOLD = 10 // 同 IP 失败几次后永久封禁
 export const FAIL_WINDOW = 5 * 60 // 失败计数窗口期(秒)
 
 export interface UserFailRecord {
