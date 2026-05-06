@@ -240,16 +240,16 @@ function isAllWeekdays(idx) {
         <div class="flex items-center gap-2">
           <Input
             type="time"
-            :value="w.start"
+            :model-value="w.start"
             class="w-28"
-            @input="updateWindow(idx, 'start', $event.target.value)"
+            @update:model-value="updateWindow(idx, 'start', $event)"
           />
           <span class="text-sm">至</span>
           <Input
             type="time"
-            :value="w.end"
+            :model-value="w.end"
             class="w-28"
-            @input="updateWindow(idx, 'end', $event.target.value)"
+            @update:model-value="updateWindow(idx, 'end', $event)"
           />
           <span class="text-xs text-muted-foreground flex-1">
             {{ w.start > w.end ? '(跨午夜)' : '' }}
@@ -290,9 +290,9 @@ function isAllWeekdays(idx) {
     <div class="space-y-2">
       <Label class="text-xs">命中后跳转到</Label>
       <Input
-        :value="modelValue.url"
+        :model-value="modelValue.url"
         placeholder="https://target.com"
-        @input="updateUrl"
+        @update:model-value="emit('update:modelValue', { ...modelValue, url: $event })"
       />
     </div>
   </div>

@@ -140,9 +140,9 @@ function updateUrl(e) {
     <div class="space-y-2">
       <Label class="text-xs">命中后跳转到</Label>
       <Input
-        :value="modelValue.url"
+        :model-value="modelValue.url"
         placeholder="https://target.com"
-        @input="updateUrl"
+        @update:model-value="emit('update:modelValue', { ...modelValue, url: $event })"
       />
     </div>
   </div>

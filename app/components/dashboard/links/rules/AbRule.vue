@@ -53,10 +53,10 @@ function getPercent(weight) {
         <div class="flex items-center gap-2">
           <span class="text-xs font-mono w-8 text-muted-foreground">#{{ idx + 1 }}</span>
           <Input
-            :value="v.url"
+            :model-value="v.url"
             placeholder="https://variant.com"
             class="flex-1"
-            @input="updateVariant(idx, 'url', $event.target.value)"
+            @update:model-value="updateVariant(idx, 'url', $event)"
           />
           <button
             type="button"
@@ -74,9 +74,9 @@ function getPercent(weight) {
             type="number"
             min="0"
             max="10000"
-            :value="v.weight"
+            :model-value="v.weight"
             class="w-20 h-8"
-            @input="updateVariant(idx, 'weight', $event.target.value)"
+            @update:model-value="updateVariant(idx, 'weight', $event)"
           />
           <span class="text-xs text-muted-foreground">
             ≈ {{ getPercent(v.weight) }}%
