@@ -62,24 +62,41 @@ async function loginByUser() {
   }
   catch (e) {
     console.error(e)
-    const errData = e?.data?.data || {}
     const errMessage = e?.data?.message || e?.message || '请检查用户名和密码'
 
-    // 处理账号锁定
-    if (errData.locked && errData.remainingSeconds) {
-      lockoutMessage.value = errMessage
-      startCountdown(errData.remainingSeconds)
-      toast.error('账号已锁定', { description: errMessage })
+    // 解析消息前缀来判断错误类型
+    const lockedMatch = errMessage.match(/^\[LOCKED:(\d+)\]\s*(.*)$/)
+    const remainingMatch = errMessage.match(/^\[REMAINING:(\d+)\]\s*(.*)$/)
+    const ipBlockedMatch = errMessage.match(/^\[IP_BLOCKED\]\s*(.*)$/)
+
+    if (lockedMatch) {
+      // 账号锁定
+      const seconds = Number.parseInt(lockedMatch[1], 10)
+      const cleanMessage = lockedMatch[2]
+      lockoutMessage.value = cleanMessage
+      remainingAttempts.value = null
+      startCountdown(seconds)
+      toast.error('账号已锁定', { description: cleanMessage })
     }
-    // 处理普通失败带剩余次数
-    else if (typeof errData.remaining === 'number') {
-      remainingAttempts.value = errData.remaining
+    else if (remainingMatch) {
+      // 普通失败带剩余次数
+      const remaining = Number.parseInt(remainingMatch[1], 10)
+      const cleanMessage = remainingMatch[2]
+      remainingAttempts.value = remaining
       lockoutMessage.value = ''
-      toast.error('登录失败', { description: errMessage })
+      toast.error('登录失败', { description: cleanMessage })
     }
-    // IP 封禁等其他情况
+    else if (ipBlockedMatch) {
+      // IP 封禁
+      const cleanMessage = ipBlockedMatch[1]
+      lockoutMessage.value = cleanMessage
+      remainingAttempts.value = null
+      toast.error('IP 已被封禁', { description: cleanMessage })
+    }
     else {
-      lockoutMessage.value = errMessage
+      // 其他错误
+      remainingAttempts.value = null
+      lockoutMessage.value = ''
       toast.error('登录失败', { description: errMessage })
     }
   }

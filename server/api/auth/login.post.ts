@@ -20,7 +20,7 @@ export default eventHandler(async (event) => {
       throw createError({
         statusCode: 403,
         statusMessage: 'Forbidden',
-        message: `您的 IP (${ip}) 已被封禁,请联系管理员`,
+        message: `[IP_BLOCKED] 您的 IP (${ip}) 已被封禁,请联系管理员`,
       })
     }
   }
@@ -32,11 +32,7 @@ export default eventHandler(async (event) => {
     throw createError({
       statusCode: 429,
       statusMessage: 'Too Many Requests',
-      data: {
-        locked: true,
-        remainingSeconds: lockStatus.remainingSeconds,
-      },
-      message: `账号已锁定,请 ${minutes} 分钟后再试`,
+      message: `[LOCKED:${lockStatus.remainingSeconds}] 账号已锁定,请 ${minutes} 分钟后再试`,
     })
   }
 
@@ -51,7 +47,27 @@ export default eventHandler(async (event) => {
   if (!user) {
     // 故意不区分"用户不存在"和"密码错误"——避免被枚举用户名
     if (!isAllowlisted) {
-      await recordLoginFailure(event, body.username, ip)
+      const failResult = await recordLoginFailure(event, body.username, ip)
+      if (failResult.userLocked) {
+        throw createError({
+          statusCode: 429,
+          statusMessage: 'Too Many Requests',
+          message: `[LOCKED:300] 连续失败 ${failResult.userFailCount} 次,账号已锁定 5 分钟`,
+        })
+      }
+      if (failResult.ipBlocked) {
+        throw createError({
+          statusCode: 403,
+          statusMessage: 'Forbidden',
+          message: `[IP_BLOCKED] IP 失败次数过多,已被永久封禁`,
+        })
+      }
+      const remaining = Math.max(0, 3 - failResult.userFailCount)
+      throw createError({
+        statusCode: 401,
+        statusMessage: 'Unauthorized',
+        message: `[REMAINING:${remaining}] 用户名或密码错误,还可尝试 ${remaining} 次`,
+      })
     }
     throw createError({
       statusCode: 401,
@@ -79,11 +95,7 @@ export default eventHandler(async (event) => {
         throw createError({
           statusCode: 429,
           statusMessage: 'Too Many Requests',
-          data: {
-            locked: true,
-            remainingSeconds: 5 * 60,
-          },
-          message: `连续失败 ${failResult.userFailCount} 次,账号已锁定 5 分钟`,
+          message: `[LOCKED:300] 连续失败 ${failResult.userFailCount} 次,账号已锁定 5 分钟`,
         })
       }
 
@@ -92,23 +104,16 @@ export default eventHandler(async (event) => {
         throw createError({
           statusCode: 403,
           statusMessage: 'Forbidden',
-          message: `IP 失败次数过多,已被永久封禁`,
+          message: `[IP_BLOCKED] IP 失败次数过多,已被永久封禁`,
         })
       }
 
       // 普通失败
-      const remaining = 3 - failResult.userFailCount
-      const hint = remaining > 0
-        ? `,还可尝试 ${remaining} 次`
-        : ''
+      const remaining = Math.max(0, 3 - failResult.userFailCount)
       throw createError({
         statusCode: 401,
         statusMessage: 'Unauthorized',
-        data: {
-          failCount: failResult.userFailCount,
-          remaining: Math.max(0, remaining),
-        },
-        message: `用户名或密码错误${hint}`,
+        message: `[REMAINING:${remaining}] 用户名或密码错误,还可尝试 ${remaining} 次`,
       })
     }
     throw createError({
