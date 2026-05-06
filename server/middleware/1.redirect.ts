@@ -59,7 +59,11 @@ export default eventHandler(async (event) => {
         console.error('Failed write access log:', error)
       }
       const target = redirectWithQuery ? withQuery(targetUrl, getQuery(event)) : targetUrl
-      return sendRedirect(event, target, +useRuntimeConfig(event).redirectStatusCode)
+      // 有规则时强制使用 302(防浏览器/CDN 缓存,每次重新计算规则)
+      // 无规则时用配置的状态码(默认 301,性能更好)
+      const hasRules = Array.isArray(rules) && rules.length > 0
+      const statusCode = hasRules ? 302 : +useRuntimeConfig(event).redirectStatusCode
+      return sendRedirect(event, target, statusCode)
     }
   }
 })
