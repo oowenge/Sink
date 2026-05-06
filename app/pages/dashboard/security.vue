@@ -1,5 +1,5 @@
 <script setup>
-import { Snowflake } from 'lucide-vue-next'
+import { Snowflake, UserCog } from 'lucide-vue-next'
 
 definePageMeta({
   middleware: 'admin-only',
@@ -14,12 +14,20 @@ definePageMeta({
       <h1 class="text-2xl font-bold">
         安全中心
       </h1>
-      <NuxtLink to="/dashboard/cold-links">
-        <Button variant="outline" size="sm">
-          <Snowflake class="w-4 h-4 mr-2" />
-          冷链接清理
-        </Button>
-      </NuxtLink>
+      <div class="flex gap-2">
+        <NuxtLink to="/dashboard/transfer-links">
+          <Button variant="outline" size="sm">
+            <UserCog class="w-4 h-4 mr-2" />
+            批量转移链接
+          </Button>
+        </NuxtLink>
+        <NuxtLink to="/dashboard/cold-links">
+          <Button variant="outline" size="sm">
+            <Snowflake class="w-4 h-4 mr-2" />
+            冷链接清理
+          </Button>
+        </NuxtLink>
+      </div>
     </div>
 
     <DashboardSecurityStatus />
