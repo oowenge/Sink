@@ -57,8 +57,8 @@ async function removeItem(item) {
   const itemKey = `${item.type}:${item.value}`
   removing.value[itemKey] = true
   try {
-    await useAPI('/api/admin/security/allowlist', {
-      method: 'DELETE',
+    await useAPI('/api/admin/security/allowlist-remove', {
+      method: 'POST',
       body: { type: item.type, value: item.value },
     })
     toast.success(`已移除 ${item.value}`)
