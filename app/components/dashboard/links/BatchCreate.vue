@@ -15,6 +15,13 @@ const onConflict = ref<'skip' | 'overwrite'>('skip')
 const loading = ref(false)
 const result = ref<BatchResult | null>(null)
 
+function normalizeUrl(url: string): string {
+  if (url && !/^https?:\/\//i.test(url)) {
+    return 'https://' + url
+  }
+  return url
+}
+
 const parsedLinks = computed(() => {
   return inputText.value
     .split(/\r?\n/)
@@ -22,10 +29,8 @@ const parsedLinks = computed(() => {
     .filter(Boolean)
     .map((line) => {
       const parts = line.split(/[,\t]/).map(s => s.trim())
-      // 关键:slug/comment 没填时不传(undefined),
-      // 让后端 LinkSchema 的 .default(nanoid()) 自动生成 slug
       const item: { url: string, slug?: string, comment?: string } = {
-        url: parts[0] || '',
+        url: normalizeUrl(parts[0] || ''),
       }
       if (parts[1])
         item.slug = parts[1]

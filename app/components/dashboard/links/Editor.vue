@@ -104,6 +104,9 @@ onMounted(() => {
 })
 
 async function onSubmit(formData) {
+  if (formData.url && !/^https?:\/\//i.test(formData.url)) {
+    formData.url = 'https://' + formData.url
+  }
   const link = {
     url: formData.url,
     slug: formData.slug,
