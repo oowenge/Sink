@@ -118,9 +118,19 @@ export default eventHandler(async (event) => {
       }
 
       // 决定状态码
+      // 优先级: 有规则强制 302 > 链接配置 redirectStatus > 全局默认
       const target = redirectWithQuery ? withQuery(targetUrl, getQuery(event)) : targetUrl
       const hasRules = Array.isArray(rules) && rules.length > 0
-      const statusCode = hasRules ? 302 : +useRuntimeConfig(event).redirectStatusCode
+      let statusCode: number
+      if (hasRules) {
+        statusCode = 302 // 有规则强制 302,防 CDN 缓存
+      }
+      else if ((link as any).redirectStatus) {
+        statusCode = (link as any).redirectStatus
+      }
+      else {
+        statusCode = +useRuntimeConfig(event).redirectStatusCode
+      }
       return sendRedirect(event, target, statusCode)
     }
   }

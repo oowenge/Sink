@@ -24,7 +24,8 @@ const form = ref({
   slug: '',
   comment: '',
   expiration: '', // datetime-local 字符串,如 "2026-12-31T23:59"
-  rules: [], // 跳转规则数组(下个 batch 填充)
+  rules: [], // 跳转规则数组
+  redirectStatus: '', // 重定向状态码: '' / '301' / '302' / '307'
 })
 
 const aiSlugPending = ref(false)
@@ -53,8 +54,12 @@ function initForm() {
     form.value.expiration = ''
   }
 
+  form.value.redirectStatus = props.link.redirectStatus ? String(props.link.redirectStatus) : ''
+
   errors.value = { url: '', slug: '' }
-  showOptional.value = !!(props.link.comment || props.link.expiration || (Array.isArray(props.link.rules) && props.link.rules.length > 0))
+  showOptional.value = !!(props.link.comment || props.link.expiration
+    || (Array.isArray(props.link.rules) && props.link.rules.length > 0)
+    || props.link.redirectStatus)
 }
 
 // 弹窗打开时初始化
@@ -152,6 +157,11 @@ async function onSubmit() {
   // 规则数组(过滤掉无效的)
   if (Array.isArray(form.value.rules) && form.value.rules.length > 0) {
     linkData.rules = form.value.rules
+  }
+
+  // 重定向状态码
+  if (form.value.redirectStatus) {
+    linkData.redirectStatus = Number(form.value.redirectStatus)
   }
 
   submitting.value = true
@@ -279,6 +289,39 @@ async function onSubmit() {
               />
               <p class="text-xs text-muted-foreground">
                 到期后短链将失效。留空表示永不过期。
+              </p>
+            </div>
+
+            <!-- UTM 参数构建器 -->
+            <div class="space-y-2">
+              <Label>UTM 参数</Label>
+              <DashboardLinksUtmBuilder v-model="form.url" />
+            </div>
+
+            <!-- 跳转状态码 -->
+            <div class="space-y-2">
+              <Label>重定向状态码</Label>
+              <Select v-model="form.redirectStatus">
+                <SelectTrigger>
+                  <SelectValue placeholder="使用全局默认" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">
+                    使用全局默认
+                  </SelectItem>
+                  <SelectItem value="301">
+                    301 永久重定向(推荐,SEO 友好,浏览器会缓存)
+                  </SelectItem>
+                  <SelectItem value="302">
+                    302 临时重定向(浏览器不缓存,适合频繁更换目标)
+                  </SelectItem>
+                  <SelectItem value="307">
+                    307 临时重定向(同 302 但保留 POST 方法)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p class="text-xs text-muted-foreground">
+                有跳转规则的链接会强制使用 302(防 CDN 缓存)
               </p>
             </div>
 

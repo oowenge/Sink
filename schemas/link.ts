@@ -60,4 +60,7 @@ export const LinkSchema = z.object({
   image: z.string().trim().url().max(2048).optional(),
   // 跳转规则数组(可选,老链接没有此字段)
   rules: z.array(RuleSchema).max(50).optional(),
+  // 重定向状态码(可选,默认走全局 redirectStatusCode)
+  // 有规则的链接会强制使用 302,此字段会被忽略
+  redirectStatus: z.union([z.literal(301), z.literal(302), z.literal(307)]).optional(),
 })
