@@ -30,7 +30,7 @@ const rulesSummary = computed(() => {
   const rules = props.link.rules
   if (!Array.isArray(rules) || rules.length === 0) return null
 
-  const counts = { country: 0, time: 0, ab: 0 }
+  const counts = { country: 0, time: 0, ab: 0, device: 0 }
   for (const r of rules) {
     if (r.type in counts) counts[r.type]++
   }
@@ -39,6 +39,7 @@ const rulesSummary = computed(() => {
   if (counts.country) parts.push(`地理 ×${counts.country}`)
   if (counts.time) parts.push(`时间 ×${counts.time}`)
   if (counts.ab) parts.push(`A/B ×${counts.ab}`)
+  if (counts.device) parts.push(`设备 ×${counts.device}`)
 
   return {
     total: rules.length,

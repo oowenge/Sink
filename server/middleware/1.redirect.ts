@@ -2,6 +2,45 @@ import type { LinkSchema } from '@@/schemas/link'
 import type { z } from 'zod'
 import { parsePath, withQuery } from 'ufo'
 
+/**
+ * 从 User-Agent 解析设备类别
+ * 一个访问者可能匹配多个类别(例如 iPhone = mobile + ios)
+ */
+function detectDeviceCategories(event: any): Array<'mobile' | 'tablet' | 'desktop' | 'ios' | 'android' | 'bot'> {
+  const ua = (getRequestHeader(event, 'user-agent') || '').toLowerCase()
+  const cats: Array<'mobile' | 'tablet' | 'desktop' | 'ios' | 'android' | 'bot'> = []
+
+  if (!ua) return ['desktop'] // 没 UA 兜底为桌面
+
+  // bot 检测(优先级最高)
+  if (/bot|spider|crawler|fetch|curl|wget|postman|axios|python|java\//i.test(ua)) {
+    cats.push('bot')
+    return cats
+  }
+
+  // iOS 检测(iPhone/iPad/iPod)
+  const isIos = /iphone|ipad|ipod/.test(ua)
+  if (isIos) cats.push('ios')
+
+  // 安卓检测
+  const isAndroid = /android/.test(ua)
+  if (isAndroid) cats.push('android')
+
+  // 平板检测
+  const isTablet = /ipad|tablet|kindle|playbook|silk/.test(ua)
+    || (isAndroid && !/mobile/.test(ua)) // 安卓平板的 UA 通常不含 'mobile'
+
+  // 移动检测
+  const isMobile = /mobile|iphone|ipod|blackberry|opera mini|opera mobi|webos|windows phone/.test(ua)
+    || (isAndroid && /mobile/.test(ua))
+
+  if (isTablet) cats.push('tablet')
+  else if (isMobile) cats.push('mobile')
+  else cats.push('desktop')
+
+  return cats
+}
+
 // 一天的秒数(用于判断 lastAccessedAt 是否需要更新)
 const ONE_DAY_SECONDS = 24 * 60 * 60
 
@@ -81,7 +120,8 @@ export default eventHandler(async (event) => {
       const rules = (link as any).rules
       if (Array.isArray(rules) && rules.length > 0) {
         const country = (event.context.cloudflare?.request?.cf as any)?.country
-        const matched = matchRules(rules, { country, now: new Date() })
+        const device = detectDeviceCategories(event)
+        const matched = matchRules(rules, { country, device, now: new Date() })
         if (matched) {
           targetUrl = matched.url
           matchedRule = {

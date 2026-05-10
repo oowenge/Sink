@@ -38,10 +38,18 @@ const AbRuleSchema = z.object({
   variants: z.array(AbVariantSchema).min(2).max(20),
 })
 
+const DeviceRuleSchema = z.object({
+  id: z.string().trim().min(1).max(40),
+  type: z.literal('device'),
+  match: z.array(z.enum(['mobile', 'tablet', 'desktop', 'ios', 'android', 'bot'])).min(1).max(6),
+  url: z.string().trim().url().max(2048),
+})
+
 export const RuleSchema = z.discriminatedUnion('type', [
   CountryRuleSchema,
   TimeRuleSchema,
   AbRuleSchema,
+  DeviceRuleSchema,
 ])
 
 export const LinkSchema = z.object({

@@ -107,6 +107,9 @@ function summarizeRule(rule: any): any {
       variants: rule.variants?.map((v: any) => `${v.url}@${v.weight}`),
     }
   }
+  if (rule.type === 'device') {
+    return { type: 'device', match: rule.match, url: rule.url }
+  }
   return rule
 }
 

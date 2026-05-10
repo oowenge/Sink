@@ -1,5 +1,5 @@
 <script setup>
-import { ChevronDown, ChevronUp, Globe, Plus, SplitSquareHorizontal, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, Globe, Plus, Smartphone, SplitSquareHorizontal, Trash2 } from 'lucide-vue-next'
 
 const props = defineProps({
   modelValue: {
@@ -58,6 +58,18 @@ function addAbRule() {
   ]
 }
 
+function addDeviceRule() {
+  rules.value = [
+    ...rules.value,
+    {
+      id: genId(),
+      type: 'device',
+      match: ['mobile'],
+      url: '',
+    },
+  ]
+}
+
 function updateRule(index, newRule) {
   const next = [...rules.value]
   next[index] = newRule
@@ -112,6 +124,9 @@ const showAddMenu = ref(false)
             <Badge v-else-if="rule.type === 'ab'" variant="default">
               <SplitSquareHorizontal class="w-3 h-3 mr-1" /> A/B 测试
             </Badge>
+            <Badge v-else-if="rule.type === 'device'" variant="default">
+              <Smartphone class="w-3 h-3 mr-1" /> 设备定向
+            </Badge>
           </div>
           <div class="flex items-center gap-1">
             <button
@@ -156,6 +171,11 @@ const showAddMenu = ref(false)
         />
         <DashboardLinksRulesAbRule
           v-else-if="rule.type === 'ab'"
+          :model-value="rule"
+          @update:model-value="updateRule(idx, $event)"
+        />
+        <DashboardLinksRulesDeviceRule
+          v-else-if="rule.type === 'device'"
           :model-value="rule"
           @update:model-value="updateRule(idx, $event)"
         />
@@ -216,6 +236,21 @@ const showAddMenu = ref(false)
             </div>
             <div class="text-xs text-muted-foreground">
               按权重随机分流
+            </div>
+          </div>
+        </button>
+        <button
+          type="button"
+          class="flex items-center gap-2 w-full px-2 py-2 text-sm hover:bg-muted rounded text-left"
+          @click="addDeviceRule(); showAddMenu = false"
+        >
+          <Smartphone class="w-4 h-4" />
+          <div>
+            <div class="font-medium">
+              设备定向
+            </div>
+            <div class="text-xs text-muted-foreground">
+              按访问设备跳转
             </div>
           </div>
         </button>

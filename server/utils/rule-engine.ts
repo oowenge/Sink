@@ -44,17 +44,27 @@ export interface AbRule {
   variants: AbVariant[]
 }
 
-export type Rule = CountryRule | TimeRule | AbRule
+export type DeviceCategory = 'mobile' | 'tablet' | 'desktop' | 'ios' | 'android' | 'bot'
+
+export interface DeviceRule {
+  id: string
+  type: 'device'
+  match: DeviceCategory[]
+  url: string
+}
+
+export type Rule = CountryRule | TimeRule | AbRule | DeviceRule
 
 export interface MatchContext {
   country?: string // 访问者国家(Cloudflare cf.country)
   now?: Date // 当前时间,默认 new Date()
+  device?: DeviceCategory[] // 访问者匹配的设备类型(可能多个,如 ['mobile','ios'])
 }
 
 export interface MatchResult {
   url: string
   ruleId: string
-  ruleType: 'country' | 'time' | 'ab'
+  ruleType: 'country' | 'time' | 'ab' | 'device'
   variantIndex?: number // ab 类型才有
 }
 
@@ -90,6 +100,11 @@ export function matchRules(rules: Rule[] | undefined, ctx: MatchContext): MatchR
           }
         }
       }
+      else if (rule.type === 'device') {
+        if (matchDevice(rule, ctx.device)) {
+          return { url: rule.url, ruleId: rule.id, ruleType: 'device' }
+        }
+      }
     }
     catch (err) {
       // 单条规则出错不影响其他规则
@@ -99,7 +114,15 @@ export function matchRules(rules: Rule[] | undefined, ctx: MatchContext): MatchR
 
   return null
 }
-
+/**
+ * 设备匹配
+ * 访问者的设备类别(可能多个,如手机+iOS)与规则的 match 数组有交集即命中
+ */
+function matchDevice(rule: DeviceRule, deviceCategories: DeviceCategory[] | undefined): boolean {
+  if (!Array.isArray(deviceCategories) || deviceCategories.length === 0) return false
+  if (!Array.isArray(rule.match) || rule.match.length === 0) return false
+  return rule.match.some(c => deviceCategories.includes(c))
+}
 /**
  * 国家匹配
  */
@@ -258,7 +281,21 @@ export function validateRule(rule: any): { valid: boolean, error?: string } {
     if (!rule.url || typeof rule.url !== 'string') return { valid: false, error: 'time 规则缺少 url' }
     return { valid: true }
   }
-
+if (rule.type === 'device') {
+    if (!Array.isArray(rule.match) || rule.match.length === 0) {
+      return { valid: false, error: 'device 规则的 match 不能为空' }
+    }
+    const validCategories: DeviceCategory[] = ['mobile', 'tablet', 'desktop', 'ios', 'android', 'bot']
+    for (const c of rule.match) {
+      if (!validCategories.includes(c)) {
+        return { valid: false, error: `设备类型无效: ${c}` }
+      }
+    }
+    if (!rule.url || typeof rule.url !== 'string') {
+      return { valid: false, error: 'device 规则缺少 url' }
+    }
+    return { valid: true }
+  }
   if (rule.type === 'ab') {
     if (!Array.isArray(rule.variants) || rule.variants.length < 2) {
       return { valid: false, error: 'ab 规则至少需要 2 个 variant' }
