@@ -312,6 +312,13 @@ export default eventHandler(async (event) => {
         // 没有任何 OG 数据,fallthrough 到普通 302
       }
 
+      // ====== 关键:爬虫不写访问日志,直接 302(不污染 Analytics) ======
+      // 此时爬虫 = OG 抓不到任何数据的爬虫(罕见),给 302 让它去拿目标内容
+      if (isOgCrawler(ua)) {
+        const target = redirectWithQuery ? withQuery(targetUrl, getQuery(event)) : targetUrl
+        return sendRedirect(event, target, 302)
+      }
+
       // ====== Splash 中转页(仅对真人访客;爬虫永远跳过 Splash) ======
       const splashTemplateId = (link as any).splashTemplateId
       const query = getQuery(event)
