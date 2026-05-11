@@ -76,7 +76,8 @@ export const LinkSchema = z.object({
     z.string().trim().toLowerCase().min(1).max(30).regex(/^[^,'"\\]+$/, '标签不能包含逗号、引号、反斜杠'),
   ).max(10).optional(),
   // 密码保护(可选,提交时可能是明文,后端会哈希;查询时返回 boolean 表示是否已设置)
-  password: z.string().trim().min(4).max(32).optional(),
+  // 空字符串表示"删除密码",非空必须 4-32 位
+  password: z.union([z.literal(''), z.string().trim().min(4).max(32)]).optional(),
   // 密码哈希(后端字段,前端不直接编辑)
   passwordHash: z.string().optional(),
 })

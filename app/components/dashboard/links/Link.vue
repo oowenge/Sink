@@ -1,6 +1,6 @@
-<script setup>
+﻿<script setup>
 import { useClipboard } from '@vueuse/core'
-import { CalendarPlus2, Copy, CopyCheck, Eraser, Hourglass, Link as LinkIcon, QrCode, SquareChevronDown, SquarePen, Zap } from 'lucide-vue-next'
+import { CalendarPlus2, Copy, CopyCheck, Eraser, Hourglass, Link as LinkIcon, Lock, QrCode, SquareChevronDown, SquarePen, Zap } from 'lucide-vue-next'
 import { parseURL } from 'ufo'
 import { toast } from 'vue-sonner'
 import QRCode from './QRCode.vue'
@@ -25,7 +25,7 @@ function getLinkHost(url) {
 
 const shortLink = computed(() => `${origin}/${props.link.slug}`)
 const linkIcon = computed(() => `https://www.google.com/s2/favicons?sz=64&domain=${getLinkHost(props.link.url)}`)
-// 规则统计:有规则就在卡片底部显示徽章
+// è§„åˆ™ç»Ÿè®¡:æœ‰è§„åˆ™å°±åœ¨å¡ç‰‡åº•éƒ¨æ˜¾ç¤ºå¾½ç« 
 const rulesSummary = computed(() => {
   const rules = props.link.rules
   if (!Array.isArray(rules) || rules.length === 0) return null
@@ -36,14 +36,14 @@ const rulesSummary = computed(() => {
   }
 
   const parts = []
-  if (counts.country) parts.push(`地理 ×${counts.country}`)
-  if (counts.time) parts.push(`时间 ×${counts.time}`)
-  if (counts.ab) parts.push(`A/B ×${counts.ab}`)
-  if (counts.device) parts.push(`设备 ×${counts.device}`)
+  if (counts.country) parts.push(`åœ°ç† Ã—${counts.country}`)
+  if (counts.time) parts.push(`æ—¶é—´ Ã—${counts.time}`)
+  if (counts.ab) parts.push(`A/B Ã—${counts.ab}`)
+  if (counts.device) parts.push(`è®¾å¤‡ Ã—${counts.device}`)
 
   return {
     total: rules.length,
-    label: parts.join(' · '),
+    label: parts.join(' Â· '),
     counts,
   }
 })
@@ -209,6 +209,21 @@ function copyLink() {
         </template>
         <Separator orientation="vertical" />
         <span class="truncate">{{ link.url }}</span>
+        <template v-if="link.passwordHash">
+          <Separator orientation="vertical" />
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <span class="inline-flex items-center leading-5 whitespace-nowrap text-amber-600">
+                  <Lock class="w-4 h-4" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>此链接受密码保护</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </template>
         <template v-if="rulesSummary">
           <Separator orientation="vertical" />
           <TooltipProvider>
@@ -220,15 +235,15 @@ function copyLink() {
                 </span>
               </TooltipTrigger>
               <TooltipContent>
-                <p>已配置 {{ rulesSummary.total }} 条跳转规则</p>
-                <p class="text-xs text-muted-foreground mt-1">点击编辑查看详情</p>
+                <p>å·²é…ç½® {{ rulesSummary.total }} æ¡è·³è½¬è§„åˆ™</p>
+                <p class="text-xs text-muted-foreground mt-1">ç‚¹å‡»ç¼–è¾‘æŸ¥çœ‹è¯¦æƒ…</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </template>
       </div>
 
-      <!-- 标签徽章行 -->
+      <!-- æ ‡ç­¾å¾½ç« è¡Œ -->
       <div
         v-if="Array.isArray(link.tags) && link.tags.length > 0"
         class="flex flex-wrap gap-1"
