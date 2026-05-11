@@ -8,6 +8,15 @@ const ONE_DAY_SECONDS = 24 * 60 * 60
 const PWD_COOKIE_PREFIX = 'sink_pwd_'
 
 /**
+ * 检测访问者是不是 OG 抓取爬虫
+ * 涵盖 WhatsApp/Telegram/iMessage/Twitter/Facebook/Slack/Discord/LinkedIn 等
+ */
+function isOgCrawler(ua: string): boolean {
+  if (!ua) return false
+  return /facebookexternalhit|whatsapp|telegrambot|twitterbot|linkedinbot|discordbot|slackbot|slack-imgproxy|skype|pinterest|tumblr|redditbot|applebot|googlebot|bingbot|yandex|baiduspider|microsoft office|msedge.*preview/i.test(ua)
+}
+
+/**
  * 从 User-Agent 解析设备类别
  */
 function detectDeviceCategories(event: any): Array<'mobile' | 'tablet' | 'desktop' | 'ios' | 'android' | 'bot'> {
@@ -89,6 +98,123 @@ function isPasswordVerified(event: any, slug: string, passwordHash: string): boo
   return cookieVal === expectedToken
 }
 
+/**
+ * 计算 OG 卡片要用的元数据
+ * 优先级:用户手填 > 自动抓取缓存 > 无
+ */
+function resolveOgMetadata(link: any): { title?: string, description?: string, image?: string } {
+  return {
+    title: link.title || link.ogTitle,
+    description: link.description || link.ogDescription,
+    image: link.image || link.ogImage,
+  }
+}
+
+/**
+ * HTML 实体转义(防 XSS)
+ */
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+/**
+ * 渲染带 OG meta 的 HTML(给爬虫看)
+ * 也带 meta refresh 兜底跳转(万一被人浏览器打开)
+ */
+function renderOgHtml(targetUrl: string, og: { title?: string, description?: string, image?: string }): string {
+  const title = og.title ? escHtml(og.title) : ''
+  const desc = og.description ? escHtml(og.description) : ''
+  const image = og.image ? escHtml(og.image) : ''
+  const safeUrl = escHtml(targetUrl)
+
+  const ogTags: string[] = []
+  // 标题
+  if (title) {
+    ogTags.push(`<title>${title}</title>`)
+    ogTags.push(`<meta property="og:title" content="${title}">`)
+    ogTags.push(`<meta name="twitter:title" content="${title}">`)
+  }
+  // 描述
+  if (desc) {
+    ogTags.push(`<meta name="description" content="${desc}">`)
+    ogTags.push(`<meta property="og:description" content="${desc}">`)
+    ogTags.push(`<meta name="twitter:description" content="${desc}">`)
+  }
+  // 图片
+  if (image) {
+    ogTags.push(`<meta property="og:image" content="${image}">`)
+    ogTags.push(`<meta name="twitter:image" content="${image}">`)
+    ogTags.push(`<meta name="twitter:card" content="summary_large_image">`)
+  }
+  else {
+    ogTags.push(`<meta name="twitter:card" content="summary">`)
+  }
+  // 共用
+  ogTags.push(`<meta property="og:url" content="${safeUrl}">`)
+  ogTags.push(`<meta property="og:type" content="website">`)
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="0; url=${safeUrl}">
+${ogTags.join('\n')}
+</head>
+<body>
+<p>Redirecting to <a href="${safeUrl}">${safeUrl}</a>...</p>
+<script>window.location.replace(${JSON.stringify(targetUrl)});</script>
+</body>
+</html>`
+}
+
+/**
+ * 后台抓取 OG 元数据并更新缓存
+ * 不 await,fire-and-forget
+ */
+async function fetchAndCacheOg(event: any, link: any, KV: any): Promise<void> {
+  try {
+    const og = await fetchOgMetadata(link.url)
+    const now = Math.floor(Date.now() / 1000)
+    const hasAnyData = og.title || og.description || og.image
+
+    if (!hasAnyData) {
+      // 抓不到任何数据,也记一下 fetchedAt 避免反复尝试
+      await updateOgCache(event, link.slug, {}, now)
+      return
+    }
+
+    // 更新 D1
+    await updateOgCache(event, link.slug, og, now)
+
+    // 同步更新 KV(让下次访问立即能用)
+    const updatedLink = {
+      ...link,
+      ogTitle: og.title,
+      ogDescription: og.description,
+      ogImage: og.image,
+      ogFetchedAt: now,
+    }
+    const expiration = link.expiration && link.expiration > now ? link.expiration : undefined
+    await KV.put(`link:${link.slug}`, JSON.stringify(updatedLink), {
+      expiration,
+      metadata: {
+        expiration,
+        url: link.url,
+        comment: link.comment,
+      },
+    })
+  }
+  catch (err: any) {
+    console.error('[redirect] OG 抓取失败:', link?.slug, err?.message)
+  }
+}
+
 export default eventHandler(async (event) => {
   const { pathname: slug } = parsePath(event.path.replace(/^\/|\/$/g, ''))
   const { slugRegex, reserveSlug } = useAppConfig(event)
@@ -120,7 +246,6 @@ export default eventHandler(async (event) => {
       if (passwordHash) {
         const verified = isPasswordVerified(event, link.slug, passwordHash)
         if (!verified) {
-          // 没通过验证,返回密码输入页(多语言)
           const lang = resolvePasswordLang(
             (link as any).passwordLang,
             getRequestHeader(event, 'accept-language'),
@@ -131,7 +256,7 @@ export default eventHandler(async (event) => {
         }
       }
 
-      // 规则引擎
+      // 规则引擎(决定目标 URL)
       let targetUrl = link.url
       let matchedRule: { ruleId: string, ruleType: string, variantIndex?: number } | null = null
 
@@ -153,6 +278,37 @@ export default eventHandler(async (event) => {
       event.context.link = link
       event.context.matchedRule = matchedRule
       event.context.resolvedUrl = targetUrl
+
+      // ====== OG 爬虫检测 ======
+      const ua = getRequestHeader(event, 'user-agent') || ''
+      if (isOgCrawler(ua)) {
+        // 1. 计算要返回的 OG 数据(用户手填 > 自动抓取缓存)
+        const og = resolveOgMetadata(link as any)
+        const hasAnyOgData = og.title || og.description || og.image
+
+        // 2. 如果没有任何 OG 数据 + 缓存已过期 -> 触发懒抓取
+        // (注意:这里是 await 不是 fire-and-forget,因为爬虫不会重试)
+        if (!hasAnyOgData && !isOgCacheFresh((link as any).ogFetchedAt)) {
+          await fetchAndCacheOg(event, link, KV)
+          // 重新计算
+          const refreshed = await KV.get(`link:${link.slug}`, { type: 'json' }) as any
+          if (refreshed) {
+            Object.assign(link, refreshed)
+            const refreshedOg = resolveOgMetadata(refreshed)
+            if (refreshedOg.title || refreshedOg.description || refreshedOg.image) {
+              setHeader(event, 'content-type', 'text/html; charset=utf-8')
+              setHeader(event, 'cache-control', 'public, max-age=3600')
+              return renderOgHtml(targetUrl, refreshedOg)
+            }
+          }
+        }
+        else if (hasAnyOgData) {
+          setHeader(event, 'content-type', 'text/html; charset=utf-8')
+          setHeader(event, 'cache-control', 'public, max-age=3600')
+          return renderOgHtml(targetUrl, og)
+        }
+        // 没有任何 OG 数据,fallthrough 到普通 302
+      }
 
       // 写访问日志
       try {

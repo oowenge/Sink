@@ -33,6 +33,10 @@ interface LinkRecord {
   tags?: string[]
   passwordHash?: string
   passwordLang?: string
+  ogTitle?: string
+  ogDescription?: string
+  ogImage?: string
+  ogFetchedAt?: number
   [key: string]: any
 }
 
@@ -58,8 +62,8 @@ export async function upsertLinkToD1(event: H3Event, link: LinkRecord): Promise<
   try {
     const sql = `
       INSERT OR REPLACE INTO links
-      (id, slug, url, comment, owner, created_at, updated_at, expiration, title, description, image, rules, redirect_status, tags, password_hash, password_lang)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, slug, url, comment, owner, created_at, updated_at, expiration, title, description, image, rules, redirect_status, tags, password_hash, password_lang, og_title, og_description, og_image, og_fetched_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
     await DB.prepare(sql).bind(
       link.id || link.slug,
@@ -78,6 +82,10 @@ export async function upsertLinkToD1(event: H3Event, link: LinkRecord): Promise<
       Array.isArray(link.tags) && link.tags.length > 0 ? JSON.stringify(link.tags) : null,
       link.passwordHash ?? null,
       link.passwordLang ?? null,
+      link.ogTitle ?? null,
+      link.ogDescription ?? null,
+      link.ogImage ?? null,
+      link.ogFetchedAt ?? null,
     ).run()
   }
   catch (err: any) {
@@ -142,6 +150,10 @@ export function d1RowToLink(row: any): LinkRecord {
   }
   if (row.password_hash) link.passwordHash = row.password_hash
   if (row.password_lang) link.passwordLang = row.password_lang
+  if (row.og_title) link.ogTitle = row.og_title
+  if (row.og_description) link.ogDescription = row.og_description
+  if (row.og_image) link.ogImage = row.og_image
+  if (row.og_fetched_at != null) link.ogFetchedAt = row.og_fetched_at
   return link
 }
 /**
@@ -159,5 +171,34 @@ export async function updateLastAccessedAt(event: any, slug: string, ts: number)
   }
   catch (err: any) {
     console.error('[d1-link] update last_accessed_at 失败:', slug, err?.message)
+  }
+}
+
+/**
+ * 仅更新 OG 缓存字段(不动其他字段)
+ */
+export async function updateOgCache(
+  event: any,
+  slug: string,
+  ogData: { title?: string, description?: string, image?: string },
+  fetchedAt: number,
+): Promise<void> {
+  const DB = getDB(event)
+  if (!DB) return
+
+  try {
+    await DB.prepare(`
+      UPDATE links SET og_title = ?, og_description = ?, og_image = ?, og_fetched_at = ?
+      WHERE slug = ?
+    `).bind(
+      ogData.title ?? null,
+      ogData.description ?? null,
+      ogData.image ?? null,
+      fetchedAt,
+      slug,
+    ).run()
+  }
+  catch (err: any) {
+    console.error('[d1-link] update OG cache 失败:', slug, err?.message)
   }
 }

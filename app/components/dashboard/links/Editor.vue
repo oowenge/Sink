@@ -31,6 +31,9 @@ const form = ref({
   hasPassword: false, // 标记当前链接是否已设置密码
   passwordAction: 'keep', // 'keep' 保留 / 'change' 修改 / 'remove' 删除
   passwordLang: 'auto', // 'auto' 自动检测 / 具体语言代码
+  ogTitle: '', // 用户手填的 OG 标题(优先级高于自动抓取)
+  ogDescription: '', // 用户手填的 OG 描述
+  ogImage: '', // 用户手填的 OG 图片 URL
 })
 
 const aiSlugPending = ref(false)
@@ -65,13 +68,18 @@ function initForm() {
   form.value.password = ''
   form.value.passwordAction = form.value.hasPassword ? 'keep' : 'change'
   form.value.passwordLang = props.link.passwordLang || 'auto'
+  // OG 字段(读取用户手填的 title/description/image)
+  form.value.ogTitle = props.link.title || ''
+  form.value.ogDescription = props.link.description || ''
+  form.value.ogImage = props.link.image || ''
 
   errors.value = { url: '', slug: '' }
   showOptional.value = !!(props.link.comment || props.link.expiration
     || (Array.isArray(props.link.rules) && props.link.rules.length > 0)
     || props.link.redirectStatus
     || (Array.isArray(props.link.tags) && props.link.tags.length > 0)
-    || props.link.passwordHash)
+    || props.link.passwordHash
+    || props.link.title || props.link.description || props.link.image)
 }
 
 // 弹窗打开时初始化
@@ -198,6 +206,10 @@ async function onSubmit() {
   if (form.value.hasPassword || (form.value.passwordAction === 'change' && form.value.password)) {
     linkData.passwordLang = form.value.passwordLang
   }
+  // OG 自定义卡片(表单字段 -> schema 字段)
+  if (form.value.ogTitle.trim()) linkData.title = form.value.ogTitle.trim()
+  if (form.value.ogDescription.trim()) linkData.description = form.value.ogDescription.trim()
+  if (form.value.ogImage.trim()) linkData.image = form.value.ogImage.trim()
 
   submitting.value = true
   try {
@@ -430,6 +442,59 @@ async function onSubmit() {
                 访问者需要输入密码才能跳转。失败 5 次会锁 10 分钟(同 IP)。密码验证后浏览器记住 24 小时。
               </p>
             </div>
+
+            <!-- 自定义社交预览卡片 (OG) -->
+            <Collapsible>
+              <CollapsibleTrigger class="flex items-center gap-2 text-sm font-medium hover:text-primary py-2">
+                <span>🎴 自定义社交预览卡片(OG)</span>
+                <span v-if="form.ogTitle || form.ogDescription || form.ogImage" class="text-xs text-primary">(已配置)</span>
+              </CollapsibleTrigger>
+              <CollapsibleContent class="space-y-3 pt-2">
+                <p class="text-xs text-muted-foreground">
+                  自定义链接被分享到 WhatsApp / iMessage / Twitter / Telegram 等平台时显示的预览卡片。
+                  留空时会自动从目标网址抓取(7 天缓存)。
+                </p>
+
+                <div class="space-y-2">
+                  <Label class="text-xs">预览标题</Label>
+                  <Input
+                    v-model="form.ogTitle"
+                    placeholder="留空 = 自动从目标网址抓取"
+                    maxlength="200"
+                  />
+                </div>
+
+                <div class="space-y-2">
+                  <Label class="text-xs">预览描述</Label>
+                  <Textarea
+                    v-model="form.ogDescription"
+                    placeholder="留空 = 自动从目标网址抓取"
+                    rows="2"
+                    maxlength="500"
+                  />
+                </div>
+
+                <div class="space-y-2">
+                  <Label class="text-xs">预览图片网址</Label>
+                  <Input
+                    v-model="form.ogImage"
+                    placeholder="留空 = 自动从目标网址抓取(必须是完整 https:// 链接)"
+                    maxlength="2048"
+                  />
+                </div>
+
+                <!-- 实时预览 -->
+                <div class="pt-2">
+                  <DashboardLinksOgPreview
+                    :url="form.url"
+                    :title="form.ogTitle"
+                    :description="form.ogDescription"
+                    :image="form.ogImage"
+                  />
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+            
             <!-- 跳转状态码 -->
             <div class="space-y-2">
               <Label>重定向状态码</Label>

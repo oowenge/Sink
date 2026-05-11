@@ -82,4 +82,9 @@ export const LinkSchema = z.object({
   passwordHash: z.string().optional(),
   // 密码页语言('auto' 自动检测,或具体语言代码)
   passwordLang: z.enum(['auto', 'zh', 'en', 'pt', 'es', 'ja', 'ko', 'fr', 'de', 'ar']).optional(),
+  // OG 卡片自动抓取缓存(从目标 URL 获取的元数据)
+  ogTitle: z.string().trim().max(500).optional(),
+  ogDescription: z.string().trim().max(1000).optional(),
+  ogImage: z.string().trim().url().max(2048).optional(),
+  ogFetchedAt: z.number().int().safe().optional(),
 })
