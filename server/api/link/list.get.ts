@@ -16,9 +16,10 @@ export default eventHandler(async (event) => {
   const { limit, cursor: initialCursor, tags: tagsFilter } = await getValidatedQuery(event, z.object({
     limit: z.coerce.number().max(D1_MAX_LIMIT).default(D1_DEFAULT_LIMIT),
     cursor: z.string().trim().max(1024).optional(),
-    // tags 是逗号分隔的标签列表,AND 关系
     tags: z.string().trim().max(500).optional(),
   }).parse)
+
+  console.log('[list] params:', { useD1, limit, cursor: initialCursor, tagsFilter })
 
   if (useD1) {
     return listFromD1(event, currentUser, limit, initialCursor, tagsFilter)
@@ -36,7 +37,6 @@ async function listFromD1(event: any, currentUser: any, limit: number, cursor: s
   }
 
   // cursor 是上一页最后一条的 created_at_id 复合值,格式: "createdAt:id"
-  // 用 (created_at, id) 复合排序保证唯一稳定的分页
   let cursorCreatedAt: number | null = null
   let cursorId: string | null = null
   if (cursor) {
@@ -47,13 +47,22 @@ async function listFromD1(event: any, currentUser: any, limit: number, cursor: s
 
   const isAdmin = currentUser.role === 'admin'
 
-  // 构建 SQL
   const conditions: string[] = []
   const params: any[] = []
 
   if (!isAdmin) {
     conditions.push('owner = ?')
     params.push(currentUser.username)
+  }
+
+  // 标签筛选(AND 关系):每个标签都必须存在于 tags JSON 数组里
+  if (tagsFilter && tagsFilter.trim()) {
+    const tagList = tagsFilter.split(',').map(t => t.trim().toLowerCase()).filter(Boolean)
+    console.log('[list] 应用标签筛选:', tagList)
+    for (const tag of tagList) {
+      conditions.push('tags LIKE ?')
+      params.push(`%"${tag}"%`)
+    }
   }
 
   // cursor 分页:返回比 cursor 更旧的记录(created_at DESC, id DESC)
@@ -69,11 +78,16 @@ async function listFromD1(event: any, currentUser: any, limit: number, cursor: s
     ORDER BY created_at DESC, id DESC
     LIMIT ?
   `
-  params.push(limit + 1) // 多取 1 条用于判断是否还有下一页
+  params.push(limit + 1)
+
+  console.log('[list] SQL:', sql.replace(/\s+/g, ' ').trim())
+  console.log('[list] params:', JSON.stringify(params))
 
   try {
     const result = await DB.prepare(sql).bind(...params).all()
     const rows = result?.results || []
+
+    console.log('[list] D1 返回行数:', rows.length)
 
     const hasMore = rows.length > limit
     const items = hasMore ? rows.slice(0, limit) : rows
