@@ -102,4 +102,18 @@ export const LinkSchema = z.object({
     errorCorrection: z.enum(['L', 'M', 'Q', 'H']).optional(),
     preset: z.string().trim().max(40).optional(),
   }).optional(),
+  // Splash 中转页:用全局模板 ID + 可选的字段覆盖
+  splashTemplateId: z.string().trim().max(40).optional(),
+  splashOverrides: z.object({
+    title: z.string().trim().max(200).optional(),
+    subtitle: z.string().trim().max(500).optional(),
+    imageUrl: z.string().trim().url().max(2048).optional().or(z.literal('')),
+    buttonText: z.string().trim().max(50).optional(),
+    countdownSeconds: z.number().int().min(0).max(60).optional(),
+    pixelFacebook: z.string().trim().max(50).optional(),
+    pixelGoogleAds: z.string().trim().max(100).optional(),
+    pixelTiktok: z.string().trim().max(50).optional(),
+    pixelTwitter: z.string().trim().max(50).optional(),
+    customHtml: z.string().trim().max(5000).optional(),
+  }).optional(),
 })

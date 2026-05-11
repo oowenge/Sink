@@ -38,6 +38,8 @@ interface LinkRecord {
   ogImage?: string
   ogFetchedAt?: number
   qrConfig?: any
+  splashTemplateId?: string
+  splashOverrides?: any
   [key: string]: any
 }
 
@@ -63,8 +65,8 @@ export async function upsertLinkToD1(event: H3Event, link: LinkRecord): Promise<
   try {
     const sql = `
       INSERT OR REPLACE INTO links
-      (id, slug, url, comment, owner, created_at, updated_at, expiration, title, description, image, rules, redirect_status, tags, password_hash, password_lang, og_title, og_description, og_image, og_fetched_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, slug, url, comment, owner, created_at, updated_at, expiration, title, description, image, rules, redirect_status, tags, password_hash, password_lang, og_title, og_description, og_image, og_fetched_at, qr_config, splash_template_id, splash_overrides)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
     await DB.prepare(sql).bind(
       link.id || link.slug,
@@ -87,6 +89,9 @@ export async function upsertLinkToD1(event: H3Event, link: LinkRecord): Promise<
       link.ogDescription ?? null,
       link.ogImage ?? null,
       link.ogFetchedAt ?? null,
+      link.qrConfig && typeof link.qrConfig === 'object' ? JSON.stringify(link.qrConfig) : null,
+      link.splashTemplateId ?? null,
+      link.splashOverrides && typeof link.splashOverrides === 'object' ? JSON.stringify(link.splashOverrides) : null,
     ).run()
   }
   catch (err: any) {
@@ -161,6 +166,15 @@ export function d1RowToLink(row: any): LinkRecord {
     }
     catch {
       link.qrConfig = null
+    }
+  }
+  if (row.splash_template_id) link.splashTemplateId = row.splash_template_id
+  if (row.splash_overrides) {
+    try {
+      link.splashOverrides = JSON.parse(row.splash_overrides)
+    }
+    catch {
+      link.splashOverrides = null
     }
   }
   return link

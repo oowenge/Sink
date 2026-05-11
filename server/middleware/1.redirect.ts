@@ -1,6 +1,8 @@
 import type { LinkSchema } from '@@/schemas/link'
 import type { z } from 'zod'
 import { parsePath, withQuery } from 'ufo'
+import { getSplashTemplate, mergeSplashConfig } from '@/server/utils/splash-template'
+import { renderSplashPage } from '@/server/utils/splash-page'
 
 // 一天的秒数(用于判断 lastAccessedAt 是否需要更新)
 const ONE_DAY_SECONDS = 24 * 60 * 60
@@ -308,6 +310,65 @@ export default eventHandler(async (event) => {
           return renderOgHtml(targetUrl, og)
         }
         // 没有任何 OG 数据,fallthrough 到普通 302
+      }
+
+      // ====== Splash 中转页(仅对真人访客;爬虫永远跳过 Splash) ======
+      const splashTemplateId = (link as any).splashTemplateId
+      const query = getQuery(event)
+      const splashSkip = query?.splash_skip === '1' || query?.splash_skip === 1
+
+      if (splashTemplateId && !splashSkip && !isOgCrawler(ua)) {
+        try {
+          const template = await getSplashTemplate(event, splashTemplateId)
+          if (template) {
+            const splashCfg = mergeSplashConfig(template, (link as any).splashOverrides)
+            // 写访问日志(在 Splash 之前记录,因为用户已经"点了"短链)
+            try {
+              await useAccessLog(event)
+            }
+            catch (error) {
+              console.error('Failed write access log (splash):', error)
+            }
+            // 更新 lastAccessedAt
+            try {
+              const now = Math.floor(Date.now() / 1000)
+              const lastAt = (link as any).lastAccessedAt
+              if (!lastAt || !isSameUtcDay(lastAt, now)) {
+                await updateAccessTime(event, link, KV, now)
+              }
+            }
+            catch (err: any) {
+              console.error('[redirect] lastAccessedAt 更新失败(splash):', err?.message)
+            }
+            // 计算最终 URL(用规则引擎决定的)
+            const splashTarget = redirectWithQuery ? withQuery(targetUrl, query) : targetUrl
+            // 渲染 Splash HTML
+            const html = renderSplashPage({
+              finalUrl: splashTarget,
+              title: splashCfg.title,
+              subtitle: splashCfg.subtitle,
+              imageUrl: splashCfg.imageUrl,
+              buttonText: splashCfg.buttonText,
+              buttonColor: splashCfg.buttonColor,
+              bgColor: splashCfg.bgColor,
+              textColor: splashCfg.textColor,
+              countdownSeconds: splashCfg.countdownSeconds,
+              pixelFacebook: splashCfg.pixelFacebook,
+              pixelGoogleAds: splashCfg.pixelGoogleAds,
+              pixelTiktok: splashCfg.pixelTiktok,
+              pixelTwitter: splashCfg.pixelTwitter,
+              customHtml: splashCfg.customHtml,
+            })
+            setHeader(event, 'content-type', 'text/html; charset=utf-8')
+            setHeader(event, 'cache-control', 'no-store')
+            return html
+          }
+          // 模板不存在(可能已被删除),fallthrough 到普通跳转
+        }
+        catch (err: any) {
+          console.error('[redirect] Splash 渲染失败:', err?.message)
+          // 出错也 fallthrough 到普通跳转,不影响主流程
+        }
       }
 
       // 写访问日志
