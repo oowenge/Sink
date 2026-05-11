@@ -40,6 +40,74 @@ function triggerUpload() {
   fileInput.value?.click()
 }
 
+/**
+ * 压缩图片:
+ *   - 最长边 > 1024 -> 缩放到 1024 等比
+ *   - JPEG/WebP 质量 0.85
+ *   - PNG 保持(避免破坏透明背景)
+ *   - GIF 不压缩(浏览器 canvas 只能取第一帧,会破坏动画)
+ */
+async function compressImage(file) {
+  // GIF 不动(避免破坏动画)
+  if (file.type === 'image/gif') return file
+  // 小文件也不动(< 500 KB 通常没必要压)
+  if (file.size < 500 * 1024) return file
+
+  return new Promise((resolve) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const maxSize = 1024
+      let { width, height } = img
+      // 等比缩放
+      if (width > maxSize || height > maxSize) {
+        if (width > height) {
+          height = Math.round(height * maxSize / width)
+          width = maxSize
+        }
+        else {
+          width = Math.round(width * maxSize / height)
+          height = maxSize
+        }
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        resolve(file)
+        return
+      }
+      ctx.drawImage(img, 0, 0, width, height)
+      // PNG 保留(不丢透明),其他转 JPEG
+      const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
+      const quality = outputType === 'image/jpeg' ? 0.85 : undefined
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          resolve(file)
+          return
+        }
+        // 如果压缩后反而更大,用原图
+        if (blob.size >= file.size) {
+          resolve(file)
+          return
+        }
+        // 包装回 File
+        const ext = outputType === 'image/png' ? 'png' : 'jpg'
+        const baseName = file.name.replace(/\.[^/.]+$/, '')
+        const compressed = new File([blob], `${baseName}.${ext}`, { type: outputType })
+        resolve(compressed)
+      }, outputType, quality)
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      resolve(file) // 出错就用原图
+    }
+    img.src = url
+  })
+}
+
 async function handleFileSelect(e) {
   const file = e.target.files?.[0]
   if (!file) return
@@ -59,8 +127,15 @@ async function handleFileSelect(e) {
 
   uploading.value = true
   try {
+    // 自动压缩
+    const compressed = await compressImage(file)
+    const ratio = (compressed.size / file.size * 100).toFixed(0)
+    if (compressed !== file) {
+      console.log(`[upload] 压缩: ${(file.size / 1024).toFixed(0)} KB -> ${(compressed.size / 1024).toFixed(0)} KB (${ratio}%)`)
+    }
+
     const form = new FormData()
-    form.append('image', file)
+    form.append('image', compressed)
     const data = await useAPI('/api/upload-image', {
       method: 'POST',
       body: form,
@@ -74,7 +149,7 @@ async function handleFileSelect(e) {
   }
   finally {
     uploading.value = false
-    e.target.value = '' // 允许重复选择同一文件
+    e.target.value = ''
   }
 }
 
