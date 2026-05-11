@@ -31,6 +31,7 @@ interface LinkRecord {
   rules?: any[]
   redirectStatus?: number
   tags?: string[]
+  passwordHash?: string
   [key: string]: any
 }
 
@@ -56,8 +57,8 @@ export async function upsertLinkToD1(event: H3Event, link: LinkRecord): Promise<
   try {
     const sql = `
       INSERT OR REPLACE INTO links
-      (id, slug, url, comment, owner, created_at, updated_at, expiration, title, description, image, rules, redirect_status, tags)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, slug, url, comment, owner, created_at, updated_at, expiration, title, description, image, rules, redirect_status, tags, password_hash)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
     await DB.prepare(sql).bind(
       link.id || link.slug,
@@ -74,6 +75,7 @@ export async function upsertLinkToD1(event: H3Event, link: LinkRecord): Promise<
       Array.isArray(link.rules) && link.rules.length > 0 ? JSON.stringify(link.rules) : null,
       link.redirectStatus ?? null,
       Array.isArray(link.tags) && link.tags.length > 0 ? JSON.stringify(link.tags) : null,
+      link.passwordHash ?? null,
     ).run()
   }
   catch (err: any) {
@@ -136,6 +138,7 @@ export function d1RowToLink(row: any): LinkRecord {
       link.tags = []
     }
   }
+  if (row.password_hash) link.passwordHash = row.password_hash
   return link
 }
 /**

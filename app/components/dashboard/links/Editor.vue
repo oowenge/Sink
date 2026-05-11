@@ -27,6 +27,9 @@ const form = ref({
   rules: [], // 跳转规则数组
   redirectStatus: '', // 重定向状态码: '' / '301' / '302' / '307'
   tags: [], // 标签数组
+  password: '', // 明文密码(仅提交时使用,响应不返回)
+  hasPassword: false, // 标记当前链接是否已设置密码
+  passwordAction: 'keep', // 'keep' 保留 / 'change' 修改 / 'remove' 删除
 })
 
 const aiSlugPending = ref(false)
@@ -57,12 +60,16 @@ function initForm() {
 
   form.value.redirectStatus = props.link.redirectStatus ? String(props.link.redirectStatus) : ''
   form.value.tags = Array.isArray(props.link.tags) ? [...props.link.tags] : []
+  form.value.hasPassword = !!props.link.passwordHash
+  form.value.password = ''
+  form.value.passwordAction = form.value.hasPassword ? 'keep' : 'change'
 
   errors.value = { url: '', slug: '' }
   showOptional.value = !!(props.link.comment || props.link.expiration
     || (Array.isArray(props.link.rules) && props.link.rules.length > 0)
     || props.link.redirectStatus
-    || (Array.isArray(props.link.tags) && props.link.tags.length > 0))
+    || (Array.isArray(props.link.tags) && props.link.tags.length > 0)
+    || props.link.passwordHash)
 }
 
 // 弹窗打开时初始化
@@ -171,6 +178,20 @@ async function onSubmit() {
   if (Array.isArray(form.value.tags) && form.value.tags.length > 0) {
     linkData.tags = form.value.tags
   }
+  // 密码处理
+  if (form.value.passwordAction === 'change' && form.value.password) {
+    // 新增/修改密码
+    if (form.value.password.length < 4 || form.value.password.length > 32) {
+      errors.value.url = '密码长度需 4-32 位'
+      return
+    }
+    linkData.password = form.value.password
+  }
+  else if (form.value.passwordAction === 'remove') {
+    // 删除密码(传空字符串,后端会清除 passwordHash)
+    linkData.password = ''
+  }
+  // 'keep' 不传 password 字段,后端保留原 passwordHash
 
   submitting.value = true
   try {
@@ -311,7 +332,56 @@ async function onSubmit() {
               <Label>标签</Label>
               <DashboardLinksTagsEditor v-model="form.tags" />
             </div>
+<!-- 密码保护 -->
+            <div class="space-y-2">
+              <Label>密码保护</Label>
 
+              <!-- 当前已设置密码时,显示状态 + 操作选项 -->
+              <div v-if="form.hasPassword" class="space-y-2">
+                <div class="flex items-center gap-2 text-sm text-primary">
+                  <span>🔒 此链接已设置密码</span>
+                </div>
+                <Select v-model="form.passwordAction">
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="keep">
+                      保留当前密码
+                    </SelectItem>
+                    <SelectItem value="change">
+                      修改密码
+                    </SelectItem>
+                    <SelectItem value="remove">
+                      删除密码(移除保护)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  v-if="form.passwordAction === 'change'"
+                  v-model="form.password"
+                  type="password"
+                  placeholder="新密码(4-32 位)"
+                  maxlength="32"
+                  autocomplete="new-password"
+                />
+              </div>
+
+              <!-- 当前未设置密码 -->
+              <div v-else class="space-y-2">
+                <Input
+                  v-model="form.password"
+                  type="password"
+                  placeholder="留空 = 不启用密码保护(4-32 位)"
+                  maxlength="32"
+                  autocomplete="new-password"
+                />
+              </div>
+
+              <p class="text-xs text-muted-foreground">
+                访问者需要输入密码才能跳转。失败 5 次会锁 10 分钟(同 IP)。密码验证后浏览器记住 24 小时。
+              </p>
+            </div>
             <!-- 跳转状态码 -->
             <div class="space-y-2">
               <Label>重定向状态码</Label>

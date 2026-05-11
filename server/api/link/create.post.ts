@@ -37,8 +37,16 @@ export default eventHandler(async (event) => {
     link.slug = link.slug.toLowerCase()
   }
 
+  // 密码处理:明文 password 转 passwordHash,然后删除明文
+  const plainPassword = (link as any).password
+  if (plainPassword && typeof plainPassword === 'string') {
+    (link as any).passwordHash = await hashPassword(plainPassword)
+  }
+  delete (link as any).password
+
   const { cloudflare } = event.context
   const { KV } = cloudflare.env
+
   const existingLink = await KV.get(`link:${link.slug}`)
   if (existingLink) {
     throw createError({

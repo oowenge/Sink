@@ -19,7 +19,7 @@ export default eventHandler(async (event) => {
     tags: z.string().trim().max(500).optional(),
   }).parse)
 
-  console.log('[list] params:', { useD1, limit, cursor: initialCursor, tagsFilter })
+  
 
   if (useD1) {
     return listFromD1(event, currentUser, limit, initialCursor, tagsFilter)
@@ -58,7 +58,7 @@ async function listFromD1(event: any, currentUser: any, limit: number, cursor: s
   // 标签筛选(AND 关系):每个标签都必须存在于 tags JSON 数组里
   if (tagsFilter && tagsFilter.trim()) {
     const tagList = tagsFilter.split(',').map(t => t.trim().toLowerCase()).filter(Boolean)
-    console.log('[list] 应用标签筛选:', tagList)
+    
     for (const tag of tagList) {
       conditions.push('tags LIKE ?')
       params.push(`%"${tag}"%`)
@@ -80,14 +80,13 @@ async function listFromD1(event: any, currentUser: any, limit: number, cursor: s
   `
   params.push(limit + 1)
 
-  console.log('[list] SQL:', sql.replace(/\s+/g, ' ').trim())
-  console.log('[list] params:', JSON.stringify(params))
+
 
   try {
     const result = await DB.prepare(sql).bind(...params).all()
     const rows = result?.results || []
 
-    console.log('[list] D1 返回行数:', rows.length)
+   
 
     const hasMore = rows.length > limit
     const items = hasMore ? rows.slice(0, limit) : rows

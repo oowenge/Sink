@@ -27,6 +27,13 @@ export default eventHandler(async (event) => {
     (link as any).owner = ownerUsername
   }
 
+  // 密码处理:明文转哈希(只在创建分支)
+  const plainPassword = (link as any).password
+  if (plainPassword && typeof plainPassword === 'string') {
+    (link as any).passwordHash = await hashPassword(plainPassword)
+  }
+  delete (link as any).password
+
   // If link doesn't exist, create it
   const expiration = getExpiration(event, link.expiration)
 
