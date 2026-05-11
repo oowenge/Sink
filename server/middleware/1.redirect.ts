@@ -1,8 +1,8 @@
 import type { LinkSchema } from '@@/schemas/link'
 import type { z } from 'zod'
 import { parsePath, withQuery } from 'ufo'
-import { getSplashTemplate, mergeSplashConfig } from '@/server/utils/splash-template'
-import { renderSplashPage } from '@/server/utils/splash-page'
+import { getSplashTemplate, mergeSplashConfig } from '@@/server/utils/splash-template'
+import { renderSplashPage } from '@@/server/utils/splash-page'
 
 // 一天的秒数(用于判断 lastAccessedAt 是否需要更新)
 const ONE_DAY_SECONDS = 24 * 60 * 60

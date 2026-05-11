@@ -1,5 +1,5 @@
-import { SplashTemplateSchema } from '@/schemas/splash-template'
-import { createSplashTemplate } from '@/server/utils/splash-template'
+import { SplashTemplateSchema } from '@@/schemas/splash-template'
+import { createSplashTemplate } from '@@/server/utils/splash-template'
 
 /**
  * POST /api/admin/splash-templates

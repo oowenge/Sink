@@ -1,4 +1,4 @@
-import { listSplashTemplates } from '@/server/utils/splash-template'
+import { listSplashTemplates } from '@@/server/utils/splash-template'
 
 /**
  * GET /api/admin/splash-templates

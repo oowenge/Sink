@@ -1,4 +1,4 @@
-import { deleteSplashTemplate, getSplashTemplate } from '@/server/utils/splash-template'
+import { deleteSplashTemplate, getSplashTemplate } from '@@/server/utils/splash-template'
 
 export default eventHandler(async (event) => {
   requireAdmin(event)

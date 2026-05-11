@@ -1,5 +1,5 @@
-import { SplashTemplateSchema } from '@/schemas/splash-template'
-import { getSplashTemplate, updateSplashTemplate } from '@/server/utils/splash-template'
+import { SplashTemplateSchema } from '@@/schemas/splash-template'
+import { getSplashTemplate, updateSplashTemplate } from '@@/server/utils/splash-template'
 
 export default eventHandler(async (event) => {
   requireAdmin(event)
