@@ -38,11 +38,24 @@ export default eventHandler(async (event) => {
   }
 
   // 密码处理:明文 password 转 passwordHash,然后删除明文
+  console.log('[create] link keys after parse:', Object.keys(link))
+  console.log('[create] plainPassword:', (link as any).password)
   const plainPassword = (link as any).password
   if (plainPassword && typeof plainPassword === 'string') {
-    (link as any).passwordHash = await hashPassword(plainPassword)
+    console.log('[create] 正在哈希密码,长度:', plainPassword.length)
+    try {
+      (link as any).passwordHash = await hashPassword(plainPassword)
+      console.log('[create] 密码哈希成功,前 30 位:', (link as any).passwordHash.slice(0, 30))
+    }
+    catch (err) {
+      console.error('[create] hashPassword 失败:', err)
+    }
+  }
+  else {
+    console.log('[create] 没有密码或密码非字符串,跳过哈希')
   }
   delete (link as any).password
+  console.log('[create] final link keys:', Object.keys(link))
 
   const { cloudflare } = event.context
   const { KV } = cloudflare.env
