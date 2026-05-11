@@ -35,6 +35,8 @@ const form = ref({
   ogDescription: '', // 用户手填的 OG 描述
   ogImage: '', // 用户手填的 OG 图片 URL
   qrConfig: null, // QR 码自定义配置
+  splashTemplateId: '', // Splash 模板 ID
+  splashOverrides: {}, // Splash 局部覆盖字段
 })
 
 const aiSlugPending = ref(false)
@@ -74,6 +76,8 @@ function initForm() {
   form.value.ogDescription = props.link.description || ''
   form.value.ogImage = props.link.image || ''
   form.value.qrConfig = props.link.qrConfig || null
+  form.value.splashTemplateId = props.link.splashTemplateId || ''
+  form.value.splashOverrides = props.link.splashOverrides || {}
 
   errors.value = { url: '', slug: '' }
   showOptional.value = !!(props.link.comment || props.link.expiration
@@ -82,7 +86,8 @@ function initForm() {
     || (Array.isArray(props.link.tags) && props.link.tags.length > 0)
     || props.link.passwordHash
     || props.link.title || props.link.description || props.link.image
-    || props.link.qrConfig)
+    || props.link.qrConfig
+    || props.link.splashTemplateId)
 }
 
 // 弹窗打开时初始化
@@ -215,6 +220,13 @@ async function onSubmit() {
   // QR 码自定义配置
   if (form.value.qrConfig && typeof form.value.qrConfig === 'object') {
     linkData.qrConfig = form.value.qrConfig
+  }
+  // Splash 中转页
+  if (form.value.splashTemplateId) {
+    linkData.splashTemplateId = form.value.splashTemplateId
+    if (form.value.splashOverrides && Object.keys(form.value.splashOverrides).length > 0) {
+      linkData.splashOverrides = form.value.splashOverrides
+    }
   }
 
   submitting.value = true
@@ -514,6 +526,24 @@ async function onSubmit() {
                   v-model="form.qrConfig"
                   :short-link-url="form.url ? (form.slug ? `${$config.public.siteUrl || ''}/${form.slug}` : form.url) : ''"
                   :slug="form.slug || 'preview'"
+                />
+              </CollapsibleContent>
+            </Collapsible>
+            <!-- 🚀 Splash 中转页 -->
+            <Collapsible>
+              <CollapsibleTrigger class="flex items-center gap-2 text-sm font-medium hover:text-primary py-2">
+                <span>🚀 中转页 (Splash) + 跟踪像素</span>
+                <span v-if="form.splashTemplateId" class="text-xs text-primary">(已启用)</span>
+              </CollapsibleTrigger>
+              <CollapsibleContent class="space-y-3 pt-2">
+                <p class="text-xs text-muted-foreground">
+                  访问短链时先显示一个中转页(5 秒倒计时),可挂 Facebook/Google/TikTok 像素做广告再营销。
+                </p>
+                <DashboardLinksSplashPicker
+                  :template-id="form.splashTemplateId"
+                  :overrides="form.splashOverrides"
+                  @update:template-id="v => form.splashTemplateId = v"
+                  @update:overrides="v => form.splashOverrides = v"
                 />
               </CollapsibleContent>
             </Collapsible>
