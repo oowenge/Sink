@@ -19,12 +19,22 @@ const loadingList = ref(false)
 async function loadTemplates() {
   loadingList.value = true
   try {
-    const res = await useAPI('/api/admin/splash-templates')
-    templates.value = res?.templates || []
-    isAdmin.value = true // 成功 = admin
+    const res = await $fetch('/api/admin/splash-templates', {
+      // 静默错误,不让全局拦截器 toast
+      ignoreResponseError: true,
+    })
+    if (res && Array.isArray(res.templates)) {
+      templates.value = res.templates
+      isAdmin.value = true
+    }
+    else {
+      // 返回的不是合法 templates(可能是 403 JSON)
+      templates.value = []
+      isAdmin.value = false
+    }
   }
-  catch (err) {
-    // 403 = 非 admin,静默
+  catch {
+    // 网络错误等,静默
     isAdmin.value = false
   }
   finally {
