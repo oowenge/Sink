@@ -41,7 +41,7 @@ function buildOptions() {
     },
     imageOptions: {
       hideBackgroundDots: true,
-      imageSize: cfg.logoSize ?? 0.3,
+      Math.max(0.2, Math.min(0.5, ...)) ?? 0.3,
       margin: cfg.logoMargin ?? 8,
       crossOrigin: 'anonymous',
     },

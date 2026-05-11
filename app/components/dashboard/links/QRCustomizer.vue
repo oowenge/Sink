@@ -34,7 +34,11 @@ const config = ref({ ...DEFAULT_QR_CONFIG, ...(props.modelValue || {}) })
 // 当 modelValue 变化(外部更新)时同步
 watch(() => props.modelValue, (v) => {
   if (v) {
-    config.value = { ...DEFAULT_QR_CONFIG, ...v }
+    const merged = { ...DEFAULT_QR_CONFIG, ...v }
+    if (merged.logoUrl && (!merged.logoSize || merged.logoSize < 0.2)) {
+      merged.logoSize = 0.3
+    }
+    config.value = merged
   }
 })
 
@@ -62,6 +66,9 @@ function reset() {
 // Logo 选择
 function onLogoChange(url) {
   config.value.logoUrl = url
+  if (!config.value.logoSize || config.value.logoSize < 0.2) {
+    config.value.logoSize = 0.3
+  }
   emitChange()
 }
 
@@ -93,7 +100,7 @@ function buildOptions() {
     },
     imageOptions: {
       hideBackgroundDots: true,
-      imageSize: cfg.logoSize ?? 0.3,
+      imageSize: Math.max(0.2, Math.min(0.5, cfg.logoSize ?? 0.3)),
       margin: cfg.logoMargin ?? 8,
       crossOrigin: 'anonymous',
     },
@@ -308,7 +315,7 @@ function download(ext) {
           <Label class="text-xs">Logo 大小 ({{ Math.round((config.logoSize ?? 0.3) * 100) }}%)</Label>
           <input
             type="range"
-            min="0.1"
+            min="0.2"
             max="0.5"
             step="0.05"
             :value="config.logoSize ?? 0.3"

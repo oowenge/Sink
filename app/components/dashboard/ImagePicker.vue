@@ -51,14 +51,14 @@ async function compressImage(file) {
   // GIF 不动(避免破坏动画)
   if (file.type === 'image/gif') return file
   // 小文件也不动(< 500 KB 通常没必要压)
-  if (file.size < 500 * 1024) return file
+  if (file.size < 200 * 1024) return file
 
   return new Promise((resolve) => {
     const img = new Image()
     const url = URL.createObjectURL(file)
     img.onload = () => {
       URL.revokeObjectURL(url)
-      const maxSize = 1024
+      const maxSize = 512
       let { width, height } = img
       // 等比缩放
       if (width > maxSize || height > maxSize) {
@@ -82,7 +82,7 @@ async function compressImage(file) {
       ctx.drawImage(img, 0, 0, width, height)
       // PNG 保留(不丢透明),其他转 JPEG
       const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
-      const quality = outputType === 'image/jpeg' ? 0.85 : undefined
+      const quality = outputType === 'image/jpeg' ? 0.75 : undefined
       canvas.toBlob((blob) => {
         if (!blob) {
           resolve(file)
