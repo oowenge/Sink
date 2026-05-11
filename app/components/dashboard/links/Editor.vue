@@ -514,7 +514,6 @@ async function onSubmit() {
                   v-model="form.qrConfig"
                   :short-link-url="form.url ? (form.slug ? `${$config.public.siteUrl || ''}/${form.slug}` : form.url) : ''"
                   :slug="form.slug || 'preview'"
-                  :default-logo="form.url ? `https://www.google.com/s2/favicons?sz=64&domain=${form.url.replace(/^https?:\/\//, '').split('/')[0]}` : ''"
                 />
               </CollapsibleContent>
             </Collapsible>

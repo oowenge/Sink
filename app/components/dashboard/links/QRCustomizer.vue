@@ -78,7 +78,8 @@ let qrCode = null
 
 function buildOptions() {
   const cfg = config.value
-  const logoUrl = cfg.logoUrl || props.defaultLogo || ''
+  // 不直接用 defaultLogo(Google favicon CORS 问题);用户必须显式上传或填 URL
+  const logoUrl = cfg.logoUrl || ''
   return {
     width: 200,
     height: 200,

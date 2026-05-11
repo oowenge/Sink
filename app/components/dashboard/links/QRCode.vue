@@ -24,7 +24,9 @@ let qrCode = null
 function buildOptions() {
   // 默认 = 经典黑白 + 错误纠正 H
   const cfg = props.qrConfig || {}
-  const logoUrl = cfg.logoUrl || props.image || ''
+  // 优先用户配置的 logo;不用 props.image(它是 Google favicon,有 CORS 问题)
+  // 如果用户没配置 logo,QR 就不带 logo
+  const logoUrl = cfg.logoUrl || ''
 
   return {
     width: 256,
