@@ -34,6 +34,7 @@ const form = ref({
   ogTitle: '', // 用户手填的 OG 标题(优先级高于自动抓取)
   ogDescription: '', // 用户手填的 OG 描述
   ogImage: '', // 用户手填的 OG 图片 URL
+  qrConfig: null, // QR 码自定义配置
 })
 
 const aiSlugPending = ref(false)
@@ -72,6 +73,7 @@ function initForm() {
   form.value.ogTitle = props.link.title || ''
   form.value.ogDescription = props.link.description || ''
   form.value.ogImage = props.link.image || ''
+  form.value.qrConfig = props.link.qrConfig || null
 
   errors.value = { url: '', slug: '' }
   showOptional.value = !!(props.link.comment || props.link.expiration
@@ -79,7 +81,8 @@ function initForm() {
     || props.link.redirectStatus
     || (Array.isArray(props.link.tags) && props.link.tags.length > 0)
     || props.link.passwordHash
-    || props.link.title || props.link.description || props.link.image)
+    || props.link.title || props.link.description || props.link.image
+    || props.link.qrConfig)
 }
 
 // 弹窗打开时初始化
@@ -209,7 +212,10 @@ async function onSubmit() {
   // OG 自定义卡片(表单字段 -> schema 字段)
   if (form.value.ogTitle.trim()) linkData.title = form.value.ogTitle.trim()
   if (form.value.ogDescription.trim()) linkData.description = form.value.ogDescription.trim()
-  if (form.value.ogImage.trim()) linkData.image = form.value.ogImage.trim()
+  // QR 码自定义配置
+  if (form.value.qrConfig && typeof form.value.qrConfig === 'object') {
+    linkData.qrConfig = form.value.qrConfig
+  }
 
   submitting.value = true
   try {
@@ -491,6 +497,25 @@ async function onSubmit() {
                     :image="form.ogImage"
                   />
                 </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            <!-- 自定义 QR 码 -->
+            <Collapsible>
+              <CollapsibleTrigger class="flex items-center gap-2 text-sm font-medium hover:text-primary py-2">
+                <span>📱 自定义 QR 码</span>
+                <span v-if="form.qrConfig && form.qrConfig.preset !== 'classic'" class="text-xs text-primary">(已自定义)</span>
+              </CollapsibleTrigger>
+              <CollapsibleContent class="space-y-3 pt-2">
+                <p class="text-xs text-muted-foreground">
+                  自定义 QR 码颜色、样式、Logo。所有改动会保存到此链接,下次打开 QR 时自动应用。
+                </p>
+                <DashboardLinksQRCustomizer
+                  v-model="form.qrConfig"
+                  :short-link-url="form.url ? (form.slug ? `${$config.public.siteUrl || ''}/${form.slug}` : form.url) : ''"
+                  :slug="form.slug || 'preview'"
+                  :default-logo="form.url ? `https://www.google.com/s2/favicons?sz=64&domain=${form.url.replace(/^https?:\/\//, '').split('/')[0]}` : ''"
+                />
               </CollapsibleContent>
             </Collapsible>
 

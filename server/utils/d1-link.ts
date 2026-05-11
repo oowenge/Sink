@@ -37,6 +37,7 @@ interface LinkRecord {
   ogDescription?: string
   ogImage?: string
   ogFetchedAt?: number
+  qrConfig?: any
   [key: string]: any
 }
 
@@ -154,6 +155,14 @@ export function d1RowToLink(row: any): LinkRecord {
   if (row.og_description) link.ogDescription = row.og_description
   if (row.og_image) link.ogImage = row.og_image
   if (row.og_fetched_at != null) link.ogFetchedAt = row.og_fetched_at
+  if (row.qr_config) {
+    try {
+      link.qrConfig = JSON.parse(row.qr_config)
+    }
+    catch {
+      link.qrConfig = null
+    }
+  }
   return link
 }
 /**

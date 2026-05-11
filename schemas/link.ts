@@ -87,4 +87,19 @@ export const LinkSchema = z.object({
   ogDescription: z.string().trim().max(1000).optional(),
   ogImage: z.string().trim().url().max(2048).optional(),
   ogFetchedAt: z.number().int().safe().optional(),
+  // QR 码自定义配置(JSON 对象,前端 qr-code-styling 库使用)
+  qrConfig: z.object({
+    dotsType: z.enum(['square', 'rounded', 'dots', 'classy', 'classy-rounded', 'extra-rounded']).optional(),
+    dotsColor: z.string().trim().max(20).optional(),
+    bgColor: z.string().trim().max(20).optional(),
+    cornerSquareType: z.enum(['square', 'extra-rounded', 'dot']).optional(),
+    cornerSquareColor: z.string().trim().max(20).optional(),
+    cornerDotType: z.enum(['square', 'dot']).optional(),
+    cornerDotColor: z.string().trim().max(20).optional(),
+    logoUrl: z.string().trim().url().max(2048).optional(),
+    logoMargin: z.number().int().min(0).max(40).optional(),
+    logoSize: z.number().min(0).max(1).optional(),
+    errorCorrection: z.enum(['L', 'M', 'Q', 'H']).optional(),
+    preset: z.string().trim().max(40).optional(),
+  }).optional(),
 })
