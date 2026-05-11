@@ -30,6 +30,7 @@ const form = ref({
   password: '', // 明文密码(仅提交时使用,响应不返回)
   hasPassword: false, // 标记当前链接是否已设置密码
   passwordAction: 'keep', // 'keep' 保留 / 'change' 修改 / 'remove' 删除
+  passwordLang: 'auto', // 'auto' 自动检测 / 具体语言代码
 })
 
 const aiSlugPending = ref(false)
@@ -63,6 +64,7 @@ function initForm() {
   form.value.hasPassword = !!props.link.passwordHash
   form.value.password = ''
   form.value.passwordAction = form.value.hasPassword ? 'keep' : 'change'
+  form.value.passwordLang = props.link.passwordLang || 'auto'
 
   errors.value = { url: '', slug: '' }
   showOptional.value = !!(props.link.comment || props.link.expiration
@@ -192,6 +194,10 @@ async function onSubmit() {
     linkData.password = ''
   }
   // 'keep' 不传 password 字段,后端保留原 passwordHash
+  // 密码页语言(只在有密码或正在新增密码时才需要)
+  if (form.value.hasPassword || (form.value.passwordAction === 'change' && form.value.password)) {
+    linkData.passwordLang = form.value.passwordLang
+  }
 
   submitting.value = true
   try {
@@ -376,6 +382,48 @@ async function onSubmit() {
                   maxlength="32"
                   autocomplete="new-password"
                 />
+              </div>
+
+              <!-- 密码页语言 -->
+              <div v-if="form.hasPassword || form.password" class="space-y-1 pt-2">
+                <Label class="text-xs">密码页语言</Label>
+                <Select v-model="form.passwordLang">
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">
+                      🌐 自动检测(根据访客浏览器)
+                    </SelectItem>
+                    <SelectItem value="zh">
+                      🇨🇳 中文
+                    </SelectItem>
+                    <SelectItem value="en">
+                      🇺🇸 English
+                    </SelectItem>
+                    <SelectItem value="pt">
+                      🇧🇷 Português
+                    </SelectItem>
+                    <SelectItem value="es">
+                      🇪🇸 Español
+                    </SelectItem>
+                    <SelectItem value="ja">
+                      🇯🇵 日本語
+                    </SelectItem>
+                    <SelectItem value="ko">
+                      🇰🇷 한국어
+                    </SelectItem>
+                    <SelectItem value="fr">
+                      🇫🇷 Français
+                    </SelectItem>
+                    <SelectItem value="de">
+                      🇩🇪 Deutsch
+                    </SelectItem>
+                    <SelectItem value="ar">
+                      🇸🇦 العربية
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <p class="text-xs text-muted-foreground">

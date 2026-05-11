@@ -80,4 +80,6 @@ export const LinkSchema = z.object({
   password: z.union([z.literal(''), z.string().trim().min(4).max(32)]).optional(),
   // 密码哈希(后端字段,前端不直接编辑)
   passwordHash: z.string().optional(),
+  // 密码页语言('auto' 自动检测,或具体语言代码)
+  passwordLang: z.enum(['auto', 'zh', 'en', 'pt', 'es', 'ja', 'ko', 'fr', 'de', 'ar']).optional(),
 })
