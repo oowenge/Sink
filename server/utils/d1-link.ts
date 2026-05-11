@@ -30,6 +30,7 @@ interface LinkRecord {
   image?: string
   rules?: any[]
   redirectStatus?: number
+  tags?: string[]
   [key: string]: any
 }
 
@@ -55,8 +56,8 @@ export async function upsertLinkToD1(event: H3Event, link: LinkRecord): Promise<
   try {
     const sql = `
       INSERT OR REPLACE INTO links
-      (id, slug, url, comment, owner, created_at, updated_at, expiration, title, description, image, rules, redirect_status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, slug, url, comment, owner, created_at, updated_at, expiration, title, description, image, rules, redirect_status, tags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
     await DB.prepare(sql).bind(
       link.id || link.slug,
@@ -72,6 +73,7 @@ export async function upsertLinkToD1(event: H3Event, link: LinkRecord): Promise<
       link.image ?? null,
       Array.isArray(link.rules) && link.rules.length > 0 ? JSON.stringify(link.rules) : null,
       link.redirectStatus ?? null,
+      Array.isArray(link.tags) && link.tags.length > 0 ? JSON.stringify(link.tags) : null,
     ).run()
   }
   catch (err: any) {
@@ -126,6 +128,14 @@ export function d1RowToLink(row: any): LinkRecord {
     }
   }
   if (row.redirect_status != null) link.redirectStatus = row.redirect_status
+  if (row.tags) {
+    try {
+      link.tags = JSON.parse(row.tags)
+    }
+    catch {
+      link.tags = []
+    }
+  }
   return link
 }
 /**

@@ -1,14 +1,14 @@
 <script setup>
 import { useInfiniteScroll } from '@vueuse/core'
-import { Loader } from 'lucide-vue-next'
+import { Loader, X } from 'lucide-vue-next'
 
 const links = ref([])
 const limit = 100
 let cursor = ''
 let listComplete = false
 let listError = false
-
 const sortBy = ref('newest')
+const activeTags = ref([]) // 当前筛选的标签数组(AND 关系)
 
 const displayedLinks = computed(() => {
   const sorted = [...links.value]
@@ -28,13 +28,13 @@ const displayedLinks = computed(() => {
 
 async function getLinks() {
   try {
-    const data = await useAPI('/api/link/list', {
-      query: {
-        limit,
-        cursor,
-      },
-    })
-    links.value = links.value.concat(data.links).filter(Boolean) // Sometimes cloudflare will return null, filter out
+    const query = { limit, cursor }
+    // 有筛选标签时,传给后端 AND 过滤
+    if (activeTags.value.length > 0) {
+      query.tags = activeTags.value.join(',')
+    }
+    const data = await useAPI('/api/link/list', { query })
+    links.value = links.value.concat(data.links).filter(Boolean)
     cursor = data.cursor
     listComplete = data.list_complete
     listError = false
@@ -71,6 +71,34 @@ function updateLinkList(link, type) {
     sortBy.value = 'newest'
   }
 }
+
+// 标签筛选切换
+function toggleTagFilter(tag) {
+  if (!tag) return
+  const t = tag.toLowerCase()
+  const idx = activeTags.value.indexOf(t)
+  if (idx >= 0) {
+    activeTags.value.splice(idx, 1)
+  }
+  else {
+    activeTags.value.push(t)
+  }
+  resetAndReload()
+}
+
+function clearAllTagFilters() {
+  activeTags.value = []
+  resetAndReload()
+}
+
+// 标签筛选变了,清空当前数据重新拉
+function resetAndReload() {
+  links.value = []
+  cursor = ''
+  listComplete = false
+  listError = false
+  getLinks()
+}
 </script>
 
 <template>
@@ -94,14 +122,43 @@ function updateLinkList(link, type) {
       </DashboardNav>
       <LazyDashboardLinksSearch />
     </div>
+
+    <!-- 标签筛选条 -->
+    <div
+      v-if="activeTags.length > 0"
+      class="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2"
+    >
+      <span class="text-sm text-muted-foreground">筛选标签 (AND):</span>
+      <Badge
+        v-for="tag in activeTags"
+        :key="tag"
+        variant="default"
+        class="gap-1 pl-2 pr-1 cursor-pointer"
+        @click="toggleTagFilter(tag)"
+      >
+        #{{ tag }}
+        <X class="w-3 h-3" />
+      </Badge>
+      <Button
+        variant="ghost"
+        size="sm"
+        class="ml-auto h-7 text-xs"
+        @click="clearAllTagFilters"
+      >
+        清除筛选
+      </Button>
+    </div>
+
     <section class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
       <DashboardLinksLink
         v-for="link in displayedLinks"
         :key="link.id"
         :link="link"
         @update:link="updateLinkList"
+        @filter-tag="toggleTagFilter"
       />
     </section>
+
     <div
       v-if="isLoading"
       class="flex items-center justify-center"
@@ -109,10 +166,19 @@ function updateLinkList(link, type) {
       <Loader class="animate-spin" />
     </div>
     <div
-      v-if="!isLoading && listComplete"
+      v-if="!isLoading && listComplete && displayedLinks.length > 0"
       class="flex items-center justify-center text-sm"
     >
       {{ $t('links.no_more') }}
+    </div>
+    <div
+      v-if="!isLoading && listComplete && displayedLinks.length === 0 && activeTags.length > 0"
+      class="flex flex-col items-center justify-center text-sm py-12 gap-2"
+    >
+      <p class="text-muted-foreground">没有匹配标签的链接</p>
+      <Button variant="link" size="sm" @click="clearAllTagFilters">
+        清除筛选
+      </Button>
     </div>
     <div
       v-if="listError"

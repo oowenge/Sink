@@ -26,6 +26,7 @@ const form = ref({
   expiration: '', // datetime-local 字符串,如 "2026-12-31T23:59"
   rules: [], // 跳转规则数组
   redirectStatus: '', // 重定向状态码: '' / '301' / '302' / '307'
+  tags: [], // 标签数组
 })
 
 const aiSlugPending = ref(false)
@@ -55,11 +56,13 @@ function initForm() {
   }
 
   form.value.redirectStatus = props.link.redirectStatus ? String(props.link.redirectStatus) : ''
+  form.value.tags = Array.isArray(props.link.tags) ? [...props.link.tags] : []
 
   errors.value = { url: '', slug: '' }
   showOptional.value = !!(props.link.comment || props.link.expiration
     || (Array.isArray(props.link.rules) && props.link.rules.length > 0)
-    || props.link.redirectStatus)
+    || props.link.redirectStatus
+    || (Array.isArray(props.link.tags) && props.link.tags.length > 0))
 }
 
 // 弹窗打开时初始化
@@ -162,6 +165,11 @@ async function onSubmit() {
   // 重定向状态码
   if (form.value.redirectStatus) {
     linkData.redirectStatus = Number(form.value.redirectStatus)
+  }
+
+  // 标签数组
+  if (Array.isArray(form.value.tags) && form.value.tags.length > 0) {
+    linkData.tags = form.value.tags
   }
 
   submitting.value = true
@@ -296,6 +304,12 @@ async function onSubmit() {
             <div class="space-y-2">
               <Label>UTM 参数</Label>
               <DashboardLinksUtmBuilder v-model="form.url" />
+            </div>
+
+<!-- 标签 -->
+            <div class="space-y-2">
+              <Label>标签</Label>
+              <DashboardLinksTagsEditor v-model="form.tags" />
             </div>
 
             <!-- 跳转状态码 -->

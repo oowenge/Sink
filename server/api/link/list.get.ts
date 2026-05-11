@@ -13,20 +13,22 @@ export default eventHandler(async (event) => {
   const { cloudflare } = event.context
   const useD1 = (cloudflare?.env as any)?.USE_D1_QUERY === 'true'
 
-  const { limit, cursor: initialCursor } = await getValidatedQuery(event, z.object({
+  const { limit, cursor: initialCursor, tags: tagsFilter } = await getValidatedQuery(event, z.object({
     limit: z.coerce.number().max(D1_MAX_LIMIT).default(D1_DEFAULT_LIMIT),
     cursor: z.string().trim().max(1024).optional(),
+    // tags 是逗号分隔的标签列表,AND 关系
+    tags: z.string().trim().max(500).optional(),
   }).parse)
 
   if (useD1) {
-    return listFromD1(event, currentUser, limit, initialCursor)
+    return listFromD1(event, currentUser, limit, initialCursor, tagsFilter)
   }
 
   return listFromKV(event, currentUser, limit, initialCursor)
 })
 
 // ============ D1 实现 ============
-async function listFromD1(event: any, currentUser: any, limit: number, cursor: string | undefined) {
+async function listFromD1(event: any, currentUser: any, limit: number, cursor: string | undefined, tagsFilter?: string) {
   const DB = (event.context as any)?.cloudflare?.env?.DB
   if (!DB) {
     console.error('[list] D1 binding 不存在,退回 KV')

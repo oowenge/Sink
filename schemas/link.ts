@@ -71,4 +71,8 @@ export const LinkSchema = z.object({
   // 重定向状态码(可选,默认走全局 redirectStatusCode)
   // 有规则的链接会强制使用 302,此字段会被忽略
   redirectStatus: z.union([z.literal(301), z.literal(302), z.literal(307)]).optional(),
+  // 标签数组(可选,小写,不含特殊字符,最多 10 个)
+  tags: z.array(
+    z.string().trim().toLowerCase().min(1).max(30).regex(/^[^,'"\\]+$/, '标签不能包含逗号、引号、反斜杠'),
+  ).max(10).optional(),
 })

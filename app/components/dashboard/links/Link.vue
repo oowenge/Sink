@@ -227,6 +227,22 @@ function copyLink() {
           </TooltipProvider>
         </template>
       </div>
+
+      <!-- 标签徽章行 -->
+      <div
+        v-if="Array.isArray(link.tags) && link.tags.length > 0"
+        class="flex flex-wrap gap-1"
+      >
+        <Badge
+          v-for="t in link.tags"
+          :key="t"
+          variant="outline"
+          class="text-xs cursor-pointer hover:bg-primary hover:text-primary-foreground"
+          @click.stop.prevent="$emit('filter-tag', t)"
+        >
+          #{{ t }}
+        </Badge>
+      </div>
     </NuxtLink>
   </Card>
 </template>
