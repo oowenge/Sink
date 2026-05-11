@@ -9,19 +9,19 @@ const props = defineProps({
   },
   placeholder: {
     type: String,
-    default: '图片网址(留空 = 自动从目标网址抓取)',
+    default: '图片网址',
   },
 })
 
 const emit = defineEmits(['update:modelValue'])
 
-const mode = ref('url') // 'url' 输入网址 / 'upload' 上传文件
+const mode = ref('url') // 'url' / 'upload'
 const uploading = ref(false)
 const fileInput = ref(null)
 const preview = ref('')
 const showImageError = ref(false)
+const dragActive = ref(false)
 
-// 当 modelValue 变化时同步预览
 watch(() => props.modelValue, (v) => {
   preview.value = v || ''
   showImageError.value = false
@@ -42,15 +42,14 @@ function triggerUpload() {
 
 /**
  * 压缩图片:
- *   - 最长边 > 1024 -> 缩放到 1024 等比
- *   - JPEG/WebP 质量 0.85
- *   - PNG 保持(避免破坏透明背景)
- *   - GIF 不压缩(浏览器 canvas 只能取第一帧,会破坏动画)
+ *   - 最长边 > 512 -> 缩到 512 等比
+ *   - JPEG/WebP 质量 0.75
+ *   - PNG 保留(避免破坏透明背景)
+ *   - GIF 不压缩(canvas 只能取第一帧,会破坏动画)
+ *   - < 200 KB 不压(没必要)
  */
 async function compressImage(file) {
-  // GIF 不动(避免破坏动画)
   if (file.type === 'image/gif') return file
-  // 小文件也不动(< 500 KB 通常没必要压)
   if (file.size < 200 * 1024) return file
 
   return new Promise((resolve) => {
@@ -60,7 +59,6 @@ async function compressImage(file) {
       URL.revokeObjectURL(url)
       const maxSize = 512
       let { width, height } = img
-      // 等比缩放
       if (width > maxSize || height > maxSize) {
         if (width > height) {
           height = Math.round(height * maxSize / width)
@@ -80,7 +78,6 @@ async function compressImage(file) {
         return
       }
       ctx.drawImage(img, 0, 0, width, height)
-      // PNG 保留(不丢透明),其他转 JPEG
       const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
       const quality = outputType === 'image/jpeg' ? 0.75 : undefined
       canvas.toBlob((blob) => {
@@ -88,12 +85,10 @@ async function compressImage(file) {
           resolve(file)
           return
         }
-        // 如果压缩后反而更大,用原图
         if (blob.size >= file.size) {
           resolve(file)
           return
         }
-        // 包装回 File
         const ext = outputType === 'image/png' ? 'png' : 'jpg'
         const baseName = file.name.replace(/\.[^/.]+$/, '')
         const compressed = new File([blob], `${baseName}.${ext}`, { type: outputType })
@@ -102,7 +97,7 @@ async function compressImage(file) {
     }
     img.onerror = () => {
       URL.revokeObjectURL(url)
-      resolve(file) // 出错就用原图
+      resolve(file)
     }
     img.src = url
   })
@@ -112,7 +107,6 @@ async function handleFileSelect(e) {
   const file = e.target.files?.[0]
   if (!file) return
 
-  // 前端预校验
   const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
   if (!allowed.includes(file.type)) {
     toast.error('只支持 JPG / PNG / WebP / GIF')
@@ -127,7 +121,6 @@ async function handleFileSelect(e) {
 
   uploading.value = true
   try {
-    // 自动压缩
     const compressed = await compressImage(file)
     const ratio = (compressed.size / file.size * 100).toFixed(0)
     if (compressed !== file) {
@@ -153,8 +146,6 @@ async function handleFileSelect(e) {
   }
 }
 
-// 拖拽上传
-const dragActive = ref(false)
 function onDragOver(e) {
   e.preventDefault()
   dragActive.value = true
@@ -167,7 +158,6 @@ async function onDrop(e) {
   dragActive.value = false
   const file = e.dataTransfer?.files?.[0]
   if (!file) return
-  // 复用 handleFileSelect
   const fakeEvent = { target: { files: [file], value: '' } }
   await handleFileSelect(fakeEvent)
 }
@@ -233,7 +223,7 @@ async function onDrop(e) {
       >
     </div>
 
-    <!-- 当前图片预览 + 删除 -->
+    <!-- 图片预览 + 删除 -->
     <div v-if="preview" class="relative inline-block">
       <img
         :src="preview"

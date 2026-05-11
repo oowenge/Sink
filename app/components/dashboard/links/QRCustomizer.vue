@@ -4,22 +4,18 @@ import QRCodeStyling from 'qr-code-styling'
 import { DEFAULT_QR_CONFIG, QR_PRESETS } from '@/utils/qr-presets'
 
 const props = defineProps({
-  // 用户配置对象
   modelValue: {
     type: Object,
     default: null,
   },
-  // 短链 URL(预览用)
   shortLinkUrl: {
     type: String,
     default: '',
   },
-  // 短链 slug(下载文件名用)
   slug: {
     type: String,
     default: 'qrcode',
   },
-  // 目标 URL 的 favicon(默认 logo 用)
   defaultLogo: {
     type: String,
     default: '',
@@ -28,10 +24,8 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// 当前编辑中的配置
 const config = ref({ ...DEFAULT_QR_CONFIG, ...(props.modelValue || {}) })
 
-// 当 modelValue 变化(外部更新)时同步
 watch(() => props.modelValue, (v) => {
   if (v) {
     const merged = { ...DEFAULT_QR_CONFIG, ...v }
@@ -42,12 +36,10 @@ watch(() => props.modelValue, (v) => {
   }
 })
 
-// 任何修改都 emit 出去
 function emitChange() {
   emit('update:modelValue', { ...config.value })
 }
 
-// 应用预设
 function applyPreset(preset) {
   config.value = {
     ...config.value,
@@ -57,13 +49,11 @@ function applyPreset(preset) {
   emitChange()
 }
 
-// 重置为默认
 function reset() {
   config.value = { ...DEFAULT_QR_CONFIG }
   emitChange()
 }
 
-// Logo 选择
 function onLogoChange(url) {
   config.value.logoUrl = url
   if (!config.value.logoSize || config.value.logoSize < 0.2) {
@@ -72,20 +62,17 @@ function onLogoChange(url) {
   emitChange()
 }
 
-// 监听字段变化
 function onField(field, value) {
   config.value[field] = value
-  config.value.preset = '' // 手动改了就不再属于任何预设
+  config.value.preset = ''
   emitChange()
 }
 
-// ===== QR 渲染 =====
 const previewEl = ref(null)
 let qrCode = null
 
 function buildOptions() {
   const cfg = config.value
-  // 不直接用 defaultLogo(Google favicon CORS 问题);用户必须显式上传或填 URL
   const logoUrl = cfg.logoUrl || ''
   return {
     width: 200,
@@ -302,7 +289,7 @@ function download(ext) {
       <div class="flex items-center justify-between">
         <Label class="text-xs">中心 Logo</Label>
         <p class="text-xs text-muted-foreground">
-          留空 = 用目标网站的 favicon
+          留空 = 不带 Logo
         </p>
       </div>
       <DashboardImagePicker
@@ -310,7 +297,7 @@ function download(ext) {
         placeholder="Logo 网址或上传"
         @update:model-value="onLogoChange"
       />
-      <div v-if="config.logoUrl || defaultLogo" class="grid grid-cols-2 gap-2">
+      <div v-if="config.logoUrl" class="grid grid-cols-2 gap-2">
         <div class="space-y-1">
           <Label class="text-xs">Logo 大小 ({{ Math.round((config.logoSize ?? 0.3) * 100) }}%)</Label>
           <input

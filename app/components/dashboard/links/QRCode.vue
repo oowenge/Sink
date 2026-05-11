@@ -41,7 +41,8 @@ function buildOptions() {
     },
     imageOptions: {
       hideBackgroundDots: true,
-      Math.max(0.2, Math.min(0.5, ...)) ?? 0.3,
+      // 夹紧:logoSize < 0.2 会让库内部渲染崩溃,> 0.5 影响扫码
+      imageSize: Math.max(0.2, Math.min(0.5, cfg.logoSize ?? 0.3)),
       margin: cfg.logoMargin ?? 8,
       crossOrigin: 'anonymous',
     },
