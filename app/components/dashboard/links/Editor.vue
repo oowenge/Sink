@@ -475,11 +475,10 @@ async function onSubmit() {
                 </div>
 
                 <div class="space-y-2">
-                  <Label class="text-xs">预览图片网址</Label>
-                  <Input
+                  <Label class="text-xs">预览图片</Label>
+                  <DashboardImagePicker
                     v-model="form.ogImage"
-                    placeholder="留空 = 自动从目标网址抓取(必须是完整 https:// 链接)"
-                    maxlength="2048"
+                    placeholder="留空 = 自动从目标网址抓取"
                   />
                 </div>
 
@@ -494,7 +493,7 @@ async function onSubmit() {
                 </div>
               </CollapsibleContent>
             </Collapsible>
-            
+
             <!-- 跳转状态码 -->
             <div class="space-y-2">
               <Label>重定向状态码</Label>
