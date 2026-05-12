@@ -73,7 +73,10 @@ export default eventHandler(async (event) => {
   const ownerUsername = currentUser?.username
   const isAdmin = currentUser?.role === 'admin'
 
-  body.links.forEach((raw, idx) => {
+  // ★ 安全:改用 for...of 异步循环以支持 hashPassword
+  //   原来用 forEach 是同步的,无法 await hashPassword
+  for (let idx = 0; idx < body.links.length; idx++) {
+    const raw = body.links[idx]
     const row = idx + 1
     try {
       const link = LinkSchema.parse(raw)
@@ -85,7 +88,7 @@ export default eventHandler(async (event) => {
       const customHtml = (link as any).splashOverrides?.customHtml
       if (customHtml && typeof customHtml === 'string' && customHtml.trim() !== '' && !isAdmin) {
         prepared.push({ link, row, error: 'splashOverrides.customHtml: only admin can set this field' })
-        return
+        continue
       }
 
       // Day 2: 写入当前登录用户为 owner
@@ -93,10 +96,25 @@ export default eventHandler(async (event) => {
         (link as any).owner = ownerUsername
       }
 
+      // ★ 安全:密码处理(与 create/edit/upsert 一致)
+      //   原代码不哈希直接写 KV,导致 password 字段明文落库
+      const plainPassword = (link as any).password
+      if (plainPassword && typeof plainPassword === 'string') {
+        try {
+          (link as any).passwordHash = await hashPassword(plainPassword)
+        }
+        catch (err: any) {
+          console.error('[batch] hashPassword 失败:', err?.message)
+          prepared.push({ link, row, error: 'Password hashing failed' })
+          continue
+        }
+      }
+      delete (link as any).password
+
       // 批次内 slug 去重
       if (seenSlugsInBatch.has(link.slug)) {
         prepared.push({ link, row, error: `slug "${link.slug}" duplicated within this batch` })
-        return
+        continue
       }
       seenSlugsInBatch.add(link.slug)
       prepared.push({ link, row })
@@ -112,7 +130,7 @@ export default eventHandler(async (event) => {
         error: errorMsg,
       })
     }
-  })
+  }
 
   const succeeded: SuccessItem[] = []
   const failed: FailureItem[] = []

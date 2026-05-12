@@ -49,11 +49,6 @@ function onSelectTemplate(v) {
   emit('update:templateId', v === '__none__' ? '' : v)
 }
 
-function _onClearTemplate() {
-  emit('update:templateId', '')
-  emit('update:overrides', {})
-}
-
 // 覆盖字段
 const overrideForm = computed({
   get: () => props.overrides || {},
