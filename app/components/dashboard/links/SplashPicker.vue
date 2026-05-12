@@ -49,7 +49,7 @@ function onSelectTemplate(v) {
   emit('update:templateId', v === '__none__' ? '' : v)
 }
 
-function onClearTemplate() {
+function _onClearTemplate() {
   emit('update:templateId', '')
   emit('update:overrides', {})
 }
@@ -57,7 +57,7 @@ function onClearTemplate() {
 // 覆盖字段
 const overrideForm = computed({
   get: () => props.overrides || {},
-  set: (v) => emit('update:overrides', v),
+  set: v => emit('update:overrides', v),
 })
 
 function setOverride(key, value) {
@@ -118,7 +118,8 @@ function openCreate() {
 }
 
 function openEdit() {
-  if (!selectedTemplate.value) return
+  if (!selectedTemplate.value)
+    return
   dialogMode.value = 'edit'
   dialogForm.value = {
     name: selectedTemplate.value.name || '',
@@ -177,7 +178,8 @@ async function saveTemplate() {
 
 const deleteConfirm = ref('')
 async function deleteTemplate() {
-  if (!selectedTemplate.value) return
+  if (!selectedTemplate.value)
+    return
   if (deleteConfirm.value !== '确认删除') {
     toast.error('请在输入框里输入"确认删除"')
     return
@@ -225,7 +227,9 @@ async function deleteTemplate() {
           <SelectValue placeholder="不使用中转页" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="__none__">不使用中转页(直接跳转)</SelectItem>
+          <SelectItem value="__none__">
+            不使用中转页(直接跳转)
+          </SelectItem>
           <SelectItem
             v-for="t in templates"
             :key="t.id"
@@ -295,7 +299,9 @@ async function deleteTemplate() {
 
       <Separator />
 
-      <p class="text-xs font-medium">跟踪像素(本链接专属,与模板独立)</p>
+      <p class="text-xs font-medium">
+        跟踪像素(本链接专属,与模板独立)
+      </p>
 
       <div class="grid grid-cols-2 gap-2">
         <div class="space-y-1">
@@ -332,7 +338,8 @@ async function deleteTemplate() {
         </div>
       </div>
 
-      <div class="space-y-1">
+      <!-- 安全:customHtml 仅 admin 可见和可编辑(防 stored XSS) -->
+      <div v-if="isAdmin" class="space-y-1">
         <Label class="text-xs">自定义 HTML 片段</Label>
         <textarea
           :value="overrideForm.customHtml || ''"
@@ -400,7 +407,9 @@ async function deleteTemplate() {
           </div>
 
           <Separator />
-          <p class="text-xs font-medium">默认跟踪像素(每个使用此模板的链接都会触发)</p>
+          <p class="text-xs font-medium">
+            默认跟踪像素(每个使用此模板的链接都会触发)
+          </p>
 
           <div class="grid grid-cols-2 gap-2">
             <div class="space-y-1">
@@ -446,7 +455,9 @@ async function deleteTemplate() {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" @click="dialogOpen = false">取消</Button>
+          <Button variant="outline" @click="dialogOpen = false">
+            取消
+          </Button>
           <Button :disabled="saving" @click="saveTemplate">
             {{ saving ? '保存中...' : '保存' }}
           </Button>

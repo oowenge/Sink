@@ -1,10 +1,23 @@
 /**
  * Splash 中转页 HTML 渲染
  * 包含倒计时 + 跳过按钮 + 跟踪像素脚本
+ *
+ * 安全说明:
+ *   - Pixel ID 通过严格 regex 二次校验,防止 JS 注入(第一道防御在 schema)
+ *   - 不通过校验的 pixel ID 渲染为空字符串(静默忽略,不报错)
+ *   - customHtml 字段:仅 admin 可写(由 API 层 schemas/link.ts schemas/splash-template.ts 与对应 API 端点共同保证),
+ *     此处原样输出,信任上游已做过权限验证
  */
 
+// ===== Pixel ID 严格校验 regex(与 schema 保持一致,第二道防御) =====
+const PIXEL_FB_REGEX = /^\d{6,20}$/
+const PIXEL_GOOGLE_REGEX = /^(?:G|AW|UA|GT)-[A-Za-z0-9-]{4,40}$/
+const PIXEL_TIKTOK_REGEX = /^[\w-]{5,40}$/
+const PIXEL_TWITTER_REGEX = /^\w{5,40}$/
+
 function escHtml(s: string): string {
-  if (!s) return ''
+  if (!s)
+    return ''
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -14,9 +27,12 @@ function escHtml(s: string): string {
 }
 
 function renderFacebookPixel(pixelId: string): string {
-  if (!pixelId) return ''
-  const id = pixelId.replace(/[^0-9]/g, '')
-  if (!id) return ''
+  if (!pixelId)
+    return ''
+  // 双重保险:既走 regex,又强制只留数字
+  const id = pixelId.replace(/\D/g, '')
+  if (!id || !PIXEL_FB_REGEX.test(id))
+    return ''
   return `
 <!-- Facebook Pixel -->
 <script>
@@ -29,9 +45,12 @@ fbq('track', 'PageView');
 }
 
 function renderGoogleAds(tagId: string): string {
-  if (!tagId) return ''
+  if (!tagId)
+    return ''
   const id = tagId.trim()
-  if (!/^(G|AW|UA|GT)-/i.test(id)) return ''
+  // ★ 强化:不仅检查前缀,还检查整体格式
+  if (!PIXEL_GOOGLE_REGEX.test(id))
+    return ''
   return `
 <!-- Google Tag -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=${id}"></script>
@@ -45,9 +64,12 @@ gtag('config', '${id}');
 }
 
 function renderTiktokPixel(pixelId: string): string {
-  if (!pixelId) return ''
+  if (!pixelId)
+    return ''
   const id = pixelId.trim()
-  if (!id) return ''
+  // ★ 强化:原代码无校验,直接拼接到 JS 字符串内可注入
+  if (!PIXEL_TIKTOK_REGEX.test(id))
+    return ''
   return `
 <!-- TikTok Pixel -->
 <script>
@@ -61,9 +83,12 @@ function renderTiktokPixel(pixelId: string): string {
 }
 
 function renderTwitterPixel(pixelId: string): string {
-  if (!pixelId) return ''
+  if (!pixelId)
+    return ''
   const id = pixelId.trim()
-  if (!id) return ''
+  // ★ 强化:原代码无校验
+  if (!PIXEL_TWITTER_REGEX.test(id))
+    return ''
   return `
 <!-- Twitter Pixel -->
 <script>
@@ -95,7 +120,7 @@ export function renderSplashPage(opts: {
   const fg = opts.textColor || '#1a1a1a'
   const btnBg = opts.buttonColor || '#0066cc'
   const finalUrl = opts.finalUrl
-  const finalUrlWithSkip = finalUrl + (finalUrl.includes('?') ? '&' : '?') + 'splash_skip=1'
+  const finalUrlWithSkip = `${finalUrl + (finalUrl.includes('?') ? '&' : '?')}splash_skip=1`
 
   const title = opts.title ? escHtml(opts.title) : ''
   const subtitle = opts.subtitle ? escHtml(opts.subtitle) : ''
@@ -109,6 +134,7 @@ export function renderSplashPage(opts: {
     renderTwitterPixel(opts.pixelTwitter || ''),
   ].filter(Boolean).join('\n')
 
+  // customHtml: 仅 admin 可写(权限校验在 API 层),此处信任上游
   const customHtmlSafe = opts.customHtml || ''
 
   const imageHtml = imageUrl ? `<img class="splash-image" src="${imageUrl}" alt="">` : ''

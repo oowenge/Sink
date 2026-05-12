@@ -1,5 +1,16 @@
 import { z } from 'zod'
 
+// ===== 安全工具:与 link.ts 一致的 regex =====
+const COLOR_REGEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i
+function colorField(maxLen: number = 20) {
+  return z.string().trim().max(maxLen).regex(COLOR_REGEX, 'must be a hex color like #RRGGBB')
+}
+
+const PIXEL_FB_REGEX = /^\d{6,20}$/
+const PIXEL_GOOGLE_REGEX = /^(?:G|AW|UA|GT)-[A-Za-z0-9-]{4,40}$/
+const PIXEL_TIKTOK_REGEX = /^[\w-]{5,40}$/
+const PIXEL_TWITTER_REGEX = /^\w{5,40}$/
+
 /**
  * Splash 中转页模板 schema
  */
@@ -8,16 +19,27 @@ export const SplashTemplateSchema = z.object({
   name: z.string().trim().min(1).max(80),
   title: z.string().trim().max(200).optional(),
   subtitle: z.string().trim().max(500).optional(),
-  imageUrl: z.string().trim().url().max(2048).optional().or(z.literal('')),
+  imageUrl: z.string().trim().url().max(2048).refine(
+    (u) => {
+      try {
+        return ['http:', 'https:'].includes(new URL(u).protocol)
+      }
+      catch {
+        return false
+      }
+    },
+    { message: 'URL scheme must be http or https' },
+  ).optional().or(z.literal('')),
   buttonText: z.string().trim().max(50).optional(),
-  buttonColor: z.string().trim().max(20).optional(),
-  bgColor: z.string().trim().max(20).optional(),
-  textColor: z.string().trim().max(20).optional(),
+  buttonColor: colorField(20).optional(),
+  bgColor: colorField(20).optional(),
+  textColor: colorField(20).optional(),
   countdownSeconds: z.number().int().min(0).max(60).default(5),
-  pixelFacebook: z.string().trim().max(50).optional(),
-  pixelGoogleAds: z.string().trim().max(100).optional(),
-  pixelTiktok: z.string().trim().max(50).optional(),
-  pixelTwitter: z.string().trim().max(50).optional(),
+  pixelFacebook: z.string().trim().max(50).regex(PIXEL_FB_REGEX, 'Facebook Pixel ID must be 6-20 digits').optional().or(z.literal('')),
+  pixelGoogleAds: z.string().trim().max(100).regex(PIXEL_GOOGLE_REGEX, 'Google ID must be like G-XXXX / AW-XXXX / UA-XXXX / GT-XXXX').optional().or(z.literal('')),
+  pixelTiktok: z.string().trim().max(50).regex(PIXEL_TIKTOK_REGEX, 'TikTok Pixel ID format invalid').optional().or(z.literal('')),
+  pixelTwitter: z.string().trim().max(50).regex(PIXEL_TWITTER_REGEX, 'Twitter Pixel ID format invalid').optional().or(z.literal('')),
+  // customHtml: 保留字段,API 层做 admin 权限门(仅 admin 可写)
   customHtml: z.string().trim().max(5000).optional(),
 })
 

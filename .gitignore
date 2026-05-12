@@ -28,3 +28,6 @@ cache
 public/world.json
 
 backups/
+
+# 安全审计临时文件(本地备份+build 日志)
+_audit_temp/

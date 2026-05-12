@@ -26,6 +26,20 @@ export default eventHandler(async (event) => {
       })
     }
 
+    // ★ 安全:customHtml 仅 admin 可写(选项 3 方案)
+    //   特殊处理:如果新值与原值相同,放行(允许 agent 编辑其他字段而不动 customHtml)
+    const newCustomHtml = (link as any).splashOverrides?.customHtml
+    const oldCustomHtml = (existingLink as any).splashOverrides?.customHtml
+    const newHtmlNormalized = (typeof newCustomHtml === 'string' ? newCustomHtml.trim() : '')
+    const oldHtmlNormalized = (typeof oldCustomHtml === 'string' ? oldCustomHtml.trim() : '')
+    if (newHtmlNormalized !== oldHtmlNormalized && newHtmlNormalized !== '' && currentUser.role !== 'admin') {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'Forbidden',
+        message: 'Only admin can set customHtml',
+      })
+    }
+
     // Day 2: 强制保留原 owner
     const existingOwner = (existingLink as any).owner
 
@@ -39,7 +53,18 @@ export default eventHandler(async (event) => {
       finalPasswordHash = null // 显式清除
     }
     else if (typeof submittedPassword === 'string' && submittedPassword.length > 0) {
-      finalPasswordHash = await hashPassword(submittedPassword)
+      try {
+        finalPasswordHash = await hashPassword(submittedPassword)
+      }
+      catch (err: any) {
+        // ★ 安全:同 create,不能静默吞错
+        console.error('[edit] hashPassword 失败:', err?.message)
+        throw createError({
+          statusCode: 500,
+          statusMessage: 'Internal Server Error',
+          message: 'Password hashing failed',
+        })
+      }
     }
     else {
       finalPasswordHash = (existingLink as any).passwordHash // 保留原值

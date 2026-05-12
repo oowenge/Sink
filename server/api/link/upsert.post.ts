@@ -22,6 +22,16 @@ export default eventHandler(async (event) => {
     return { link: existingLink, shortLink, status: 'existing' }
   }
 
+  // ★ 安全:customHtml 仅 admin 可写(只在创建分支检查;已存在的链接走 existing 分支不写)
+  const customHtml = (link as any).splashOverrides?.customHtml
+  if (customHtml && typeof customHtml === 'string' && customHtml.trim() !== '' && currentUser?.role !== 'admin') {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Forbidden',
+      message: 'Only admin can set customHtml',
+    })
+  }
+
   // Day 2: 创建分支才加 owner(已存在的不动)
   if (ownerUsername) {
     (link as any).owner = ownerUsername
@@ -30,7 +40,18 @@ export default eventHandler(async (event) => {
   // 密码处理:明文转哈希(只在创建分支)
   const plainPassword = (link as any).password
   if (plainPassword && typeof plainPassword === 'string') {
-    (link as any).passwordHash = await hashPassword(plainPassword)
+    try {
+      (link as any).passwordHash = await hashPassword(plainPassword)
+    }
+    catch (err: any) {
+      // ★ 安全:同 create,不能静默吞错
+      console.error('[upsert] hashPassword 失败:', err?.message)
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Internal Server Error',
+        message: 'Password hashing failed',
+      })
+    }
   }
   delete (link as any).password
 

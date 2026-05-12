@@ -71,6 +71,7 @@ export default eventHandler(async (event) => {
   // Day 2: 当前登录用户(由 server/middleware/2.auth.ts 注入)
   const currentUser = (event.context as any).user
   const ownerUsername = currentUser?.username
+  const isAdmin = currentUser?.role === 'admin'
 
   body.links.forEach((raw, idx) => {
     const row = idx + 1
@@ -78,6 +79,14 @@ export default eventHandler(async (event) => {
       const link = LinkSchema.parse(raw)
       if (!caseSensitive)
         link.slug = link.slug.toLowerCase()
+
+      // ★ 安全:customHtml 仅 admin 可写(选项 3 方案)
+      //   该条标 failed 不影响其他条(方案 B)
+      const customHtml = (link as any).splashOverrides?.customHtml
+      if (customHtml && typeof customHtml === 'string' && customHtml.trim() !== '' && !isAdmin) {
+        prepared.push({ link, row, error: 'splashOverrides.customHtml: only admin can set this field' })
+        return
+      }
 
       // Day 2: 写入当前登录用户为 owner
       if (ownerUsername) {

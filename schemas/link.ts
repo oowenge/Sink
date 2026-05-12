@@ -5,6 +5,36 @@ const { slugRegex } = useAppConfig()
 const slugDefaultLength = +useRuntimeConfig().public.slugDefaultLength
 export const nanoid = (length: number = slugDefaultLength) => customAlphabet('23456789abcdefghjkmnpqrstuvwxyz', length)
 
+// ===== 安全工具:URL scheme 白名单(防 javascript:/data: 注入) =====
+const SAFE_URL_SCHEMES = ['http:', 'https:']
+function safeUrl(maxLen: number = 2048) {
+  return z.string().trim().url().max(maxLen).refine(
+    (u) => {
+      try {
+        const parsed = new URL(u)
+        return SAFE_URL_SCHEMES.includes(parsed.protocol)
+      }
+      catch {
+        return false
+      }
+    },
+    { message: 'URL scheme must be http or https' },
+  )
+}
+
+// ===== 安全工具:颜色值(防 CSS 注入) =====
+// 允许 #RGB / #RRGGBB / #RRGGBBAA
+const COLOR_REGEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i
+function colorField(maxLen: number = 20) {
+  return z.string().trim().max(maxLen).regex(COLOR_REGEX, 'must be a hex color like #RRGGBB')
+}
+
+// ===== 安全工具:Pixel ID 严格 regex(防 JS 注入到 pixel script) =====
+const PIXEL_FB_REGEX = /^\d{6,20}$/ // Facebook: 纯数字
+const PIXEL_GOOGLE_REGEX = /^(?:G|AW|UA|GT)-[A-Za-z0-9-]{4,40}$/ // Google: 前缀 + 字母数字连字符
+const PIXEL_TIKTOK_REGEX = /^[\w-]{5,40}$/ // TikTok: 字母数字下划线连字符
+const PIXEL_TWITTER_REGEX = /^\w{5,40}$/ // Twitter: 字母数字下划线
+
 // 规则 schema(嵌套在 LinkSchema 内)
 const TimeWindowSchema = z.object({
   start: z.string().regex(/^\d{1,2}:\d{2}$/),
@@ -16,7 +46,7 @@ const CountryRuleSchema = z.object({
   id: z.string().trim().min(1).max(40),
   type: z.literal('country'),
   match: z.array(z.string().trim().length(2)).min(1).max(50),
-  url: z.string().trim().url().max(2048),
+  url: safeUrl(2048),
 })
 
 const TimeRuleSchema = z.object({
@@ -24,11 +54,11 @@ const TimeRuleSchema = z.object({
   type: z.literal('time'),
   tz: z.string().trim().min(1).max(60),
   windows: z.array(TimeWindowSchema).min(1).max(20),
-  url: z.string().trim().url().max(2048),
+  url: safeUrl(2048),
 })
 
 const AbVariantSchema = z.object({
-  url: z.string().trim().url().max(2048),
+  url: safeUrl(2048),
   weight: z.number().nonnegative().max(10000),
 })
 
@@ -42,7 +72,7 @@ const DeviceRuleSchema = z.object({
   id: z.string().trim().min(1).max(40),
   type: z.literal('device'),
   match: z.array(z.enum(['mobile', 'tablet', 'desktop', 'ios', 'android', 'bot'])).min(1).max(6),
-  url: z.string().trim().url().max(2048),
+  url: safeUrl(2048),
 })
 
 export const RuleSchema = z.discriminatedUnion('type', [
@@ -54,7 +84,7 @@ export const RuleSchema = z.discriminatedUnion('type', [
 
 export const LinkSchema = z.object({
   id: z.string().trim().max(26).default(nanoid(10)),
-  url: z.string().trim().url().max(2048),
+  url: safeUrl(2048),
   slug: z.string().trim().max(2048).regex(new RegExp(slugRegex)).default(nanoid()),
   comment: z.string().trim().max(2048).optional(),
   createdAt: z.number().int().safe().default(() => Math.floor(Date.now() / 1000)),
@@ -65,7 +95,7 @@ export const LinkSchema = z.object({
   }).optional(),
   title: z.string().trim().max(2048).optional(),
   description: z.string().trim().max(2048).optional(),
-  image: z.string().trim().url().max(2048).optional(),
+  image: safeUrl(2048).optional(),
   // 跳转规则数组(可选,老链接没有此字段)
   rules: z.array(RuleSchema).max(50).optional(),
   // 重定向状态码(可选,默认走全局 redirectStatusCode)
@@ -85,18 +115,18 @@ export const LinkSchema = z.object({
   // OG 卡片自动抓取缓存(从目标 URL 获取的元数据)
   ogTitle: z.string().trim().max(500).optional(),
   ogDescription: z.string().trim().max(1000).optional(),
-  ogImage: z.string().trim().url().max(2048).optional(),
+  ogImage: safeUrl(2048).optional(),
   ogFetchedAt: z.number().int().safe().optional(),
   // QR 码自定义配置(JSON 对象,前端 qr-code-styling 库使用)
   qrConfig: z.object({
     dotsType: z.enum(['square', 'rounded', 'dots', 'classy', 'classy-rounded', 'extra-rounded']).optional(),
-    dotsColor: z.string().trim().max(20).optional(),
-    bgColor: z.string().trim().max(20).optional(),
+    dotsColor: colorField(20).optional(),
+    bgColor: colorField(20).optional(),
     cornerSquareType: z.enum(['square', 'extra-rounded', 'dot']).optional(),
-    cornerSquareColor: z.string().trim().max(20).optional(),
+    cornerSquareColor: colorField(20).optional(),
     cornerDotType: z.enum(['square', 'dot']).optional(),
-    cornerDotColor: z.string().trim().max(20).optional(),
-    logoUrl: z.string().trim().url().max(2048).optional(),
+    cornerDotColor: colorField(20).optional(),
+    logoUrl: safeUrl(2048).optional(),
     logoMargin: z.number().int().min(0).max(40).optional(),
     logoSize: z.number().min(0).max(1).optional(),
     errorCorrection: z.enum(['L', 'M', 'Q', 'H']).optional(),
@@ -107,13 +137,14 @@ export const LinkSchema = z.object({
   splashOverrides: z.object({
     title: z.string().trim().max(200).optional(),
     subtitle: z.string().trim().max(500).optional(),
-    imageUrl: z.string().trim().url().max(2048).optional().or(z.literal('')),
+    imageUrl: safeUrl(2048).optional().or(z.literal('')),
     buttonText: z.string().trim().max(50).optional(),
     countdownSeconds: z.number().int().min(0).max(60).optional(),
-    pixelFacebook: z.string().trim().max(50).optional(),
-    pixelGoogleAds: z.string().trim().max(100).optional(),
-    pixelTiktok: z.string().trim().max(50).optional(),
-    pixelTwitter: z.string().trim().max(50).optional(),
+    pixelFacebook: z.string().trim().max(50).regex(PIXEL_FB_REGEX, 'Facebook Pixel ID must be 6-20 digits').optional().or(z.literal('')),
+    pixelGoogleAds: z.string().trim().max(100).regex(PIXEL_GOOGLE_REGEX, 'Google ID must be like G-XXXX / AW-XXXX / UA-XXXX / GT-XXXX').optional().or(z.literal('')),
+    pixelTiktok: z.string().trim().max(50).regex(PIXEL_TIKTOK_REGEX, 'TikTok Pixel ID format invalid').optional().or(z.literal('')),
+    pixelTwitter: z.string().trim().max(50).regex(PIXEL_TWITTER_REGEX, 'Twitter Pixel ID format invalid').optional().or(z.literal('')),
+    // customHtml: 保留字段,API 层做 admin 权限门(仅 admin 可写)
     customHtml: z.string().trim().max(5000).optional(),
   }).optional(),
 })
