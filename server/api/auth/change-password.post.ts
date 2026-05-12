@@ -104,8 +104,11 @@ export default eventHandler(async (event) => {
     // 忽略
   }
 
+  // ★ 撤销该 user 的所有 session(包括当前 session),强制所有设备重新登录
+  await revokeAllUserSessions(event, currentUser.username)
+
   return {
     success: true,
-    message: '密码修改成功',
+    message: '密码修改成功,所有设备已强制下线,请重新登录',
   }
 })
