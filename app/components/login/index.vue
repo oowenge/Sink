@@ -2,23 +2,20 @@
 import { AlertCircle, KeyRound, User as UserIcon } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
-const { previewMode } = useRuntimeConfig().public
-
-const mode = ref('user') // 'user' 用户名密码 | 'token' 老 token 兜底
 const username = ref('')
 const password = ref('')
-const token = ref('')
 const submitting = ref(false)
 
 // 限流提示状态
-const lockoutMessage = ref('')   // 锁定提示文字
-const remainingAttempts = ref(null)  // 剩余尝试次数
-const lockoutCountdown = ref(0)  // 倒计时秒数
+const lockoutMessage = ref('') // 锁定提示文字
+const remainingAttempts = ref(null) // 剩余尝试次数
+const lockoutCountdown = ref(0) // 倒计时秒数
 let countdownTimer = null
 
 function startCountdown(seconds) {
   lockoutCountdown.value = seconds
-  if (countdownTimer) clearInterval(countdownTimer)
+  if (countdownTimer)
+    clearInterval(countdownTimer)
   countdownTimer = setInterval(() => {
     lockoutCountdown.value--
     if (lockoutCountdown.value <= 0) {
@@ -32,7 +29,8 @@ function startCountdown(seconds) {
 function formatCountdown(seconds) {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
-  if (m > 0) return `${m} 分 ${s} 秒`
+  if (m > 0)
+    return `${m} 分 ${s} 秒`
   return `${s} 秒`
 }
 
@@ -65,9 +63,9 @@ async function loginByUser() {
     const errMessage = e?.data?.message || e?.message || '请检查用户名和密码'
 
     // 解析消息前缀来判断错误类型
-    const lockedMatch = errMessage.match(/^\[LOCKED:(\d+)\]\s*(.*)$/)
-    const remainingMatch = errMessage.match(/^\[REMAINING:(\d+)\]\s*(.*)$/)
-    const ipBlockedMatch = errMessage.match(/^\[IP_BLOCKED\]\s*(.*)$/)
+    const lockedMatch = errMessage.match(/^\[LOCKED:(\d+)\]\s?(.*)$/)
+    const remainingMatch = errMessage.match(/^\[REMAINING:(\d+)\]\s?(.*)$/)
+    const ipBlockedMatch = errMessage.match(/^\[IP_BLOCKED\]\s?(.*)$/)
 
     if (lockedMatch) {
       // 账号锁定
@@ -105,41 +103,15 @@ async function loginByUser() {
   }
 }
 
-async function loginByToken() {
-  if (!token.value.trim()) {
-    toast.error('请输入 token')
-    return
-  }
-  submitting.value = true
-  try {
-    localStorage.setItem('SinkSiteToken', token.value.trim())
-    localStorage.removeItem('SinkUsername')
-    localStorage.removeItem('SinkUserRole')
-    await useAPI('/api/verify')
-    toast.success('登录成功')
-    await navigateTo('/dashboard')
-  }
-  catch (e) {
-    console.error(e)
-    localStorage.removeItem('SinkSiteToken')
-    toast.error('Token 无效', {
-      description: e?.data?.message || e?.message || '请检查 token',
-    })
-  }
-  finally {
-    submitting.value = false
-  }
-}
-
 function handleKeydown(e) {
   if (e.key === 'Enter') {
-    if (mode.value === 'user') loginByUser()
-    else loginByToken()
+    loginByUser()
   }
 }
 
 onUnmounted(() => {
-  if (countdownTimer) clearInterval(countdownTimer)
+  if (countdownTimer)
+    clearInterval(countdownTimer)
 })
 </script>
 
@@ -150,8 +122,7 @@ onUnmounted(() => {
         登录
       </CardTitle>
       <CardDescription>
-        <span v-if="mode === 'user'">使用用户名和密码登录</span>
-        <span v-else>使用站点 token 登录(管理员兜底)</span>
+        使用用户名和密码登录
       </CardDescription>
     </CardHeader>
     <CardContent class="grid gap-4">
@@ -176,7 +147,7 @@ onUnmounted(() => {
       </Alert>
 
       <!-- 用户名密码登录 -->
-      <div v-if="mode === 'user'" class="space-y-4">
+      <div class="space-y-4">
         <div class="space-y-2">
           <Label for="username">用户名</Label>
           <div class="relative">
@@ -209,46 +180,6 @@ onUnmounted(() => {
         <Button class="w-full" :disabled="submitting || lockoutCountdown > 0" @click="loginByUser">
           {{ submitting ? '登录中...' : (lockoutCountdown > 0 ? '已锁定' : '登录') }}
         </Button>
-      </div>
-
-      <!-- token 登录 -->
-      <div v-else class="space-y-4">
-        <div class="space-y-2">
-          <Label for="token">站点 Token</Label>
-          <div class="relative">
-            <KeyRound class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              id="token"
-              v-model="token"
-              type="password"
-              placeholder="********"
-              class="pl-9"
-              :disabled="submitting"
-              @keydown="handleKeydown"
-            />
-          </div>
-        </div>
-        <Alert v-if="previewMode">
-          <AlertCircle class="w-4 h-4" />
-          <AlertTitle>提示</AlertTitle>
-          <AlertDescription>
-            预览模式的站点 token 是 <code class="font-mono text-green-500">SinkCool</code>
-          </AlertDescription>
-        </Alert>
-        <Button class="w-full" :disabled="submitting" @click="loginByToken">
-          {{ submitting ? '登录中...' : '登录' }}
-        </Button>
-      </div>
-
-      <!-- 切换登录方式 -->
-      <div class="text-center text-xs text-muted-foreground">
-        <button
-          type="button"
-          class="hover:text-foreground hover:underline"
-          @click="mode = mode === 'user' ? 'token' : 'user'"
-        >
-          {{ mode === 'user' ? '改用 token 登录' : '改用用户名登录' }}
-        </button>
       </div>
     </CardContent>
   </Card>
