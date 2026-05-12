@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+const DUMMY_PASSWORD_HASH = 'pbkdf2$100000$00112233445566778899aabbccddeeff$ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100'
+
 const LoginSchema = z.object({
   username: z.string().trim().min(1).max(50),
   password: z.string().min(1).max(200),
@@ -45,6 +47,7 @@ export default eventHandler(async (event) => {
   } | null
 
   if (!user) {
+    await verifyPassword(body.password, DUMMY_PASSWORD_HASH)
     // 故意不区分"用户不存在"和"密码错误"——避免被枚举用户名
     if (!isAllowlisted) {
       const failResult = await recordLoginFailure(event, body.username, ip)
