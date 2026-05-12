@@ -5,14 +5,6 @@ const LoginSchema = z.object({
   password: z.string().min(1).max(200),
 })
 
-/**
- * Dummy PBKDF2 hash 用于"用户不存在"时的时序对齐
- * 格式与真实 hash 完全一致(pbkdf2$100000$salt$hash),
- * 不对应任何真实密码,verifyPassword 会跑完完整的 100k 次迭代然后返回 false。
- * 这样攻击者无法通过响应时间区分"用户不存在"和"密码错误"。
- */
-const DUMMY_PASSWORD_HASH = 'pbkdf2$100000$00112233445566778899aabbccddeeff$ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100'
-
 export default eventHandler(async (event) => {
   const body = await readValidatedBody(event, LoginSchema.parse)
   const { cloudflare } = event.context
@@ -33,10 +25,10 @@ export default eventHandler(async (event) => {
     }
   }
 
-  // 2. 检查 username 是否被锁(白名单 IP 也要查,防止有效 username 被恶意刷锁)
-  const lockStatus = await isUserLocked(event, body.username)
+  // 2. 检查 username 是否被锁(白名单 IP 也要查,防止有效 username 被恶意尝试)
+  const lockStatus = await getUserLockStatus(event, body.username)
   if (lockStatus.locked) {
-    const minutes = Math.ceil((lockStatus.remainingSeconds || 0) / 60)
+    const minutes = Math.ceil(lockStatus.remainingSeconds / 60)
     throw createError({
       statusCode: 429,
       statusMessage: 'Too Many Requests',
@@ -53,10 +45,6 @@ export default eventHandler(async (event) => {
   } | null
 
   if (!user) {
-    // ★ 防时序攻击:用 dummy hash 跑一次完整的 verifyPassword,
-    //   让响应时间与"用户存在但密码错误"对齐
-    await verifyPassword(body.password, DUMMY_PASSWORD_HASH)
-
     // 故意不区分"用户不存在"和"密码错误"——避免被枚举用户名
     if (!isAllowlisted) {
       const failResult = await recordLoginFailure(event, body.username, ip)
