@@ -10,9 +10,13 @@ function logOut() {
 <template>
   <AlertDialog>
     <AlertDialogTrigger as-child>
-      <LogOut
-        class="w-4 h-4 cursor-pointer"
-      />
+      <button
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+        title="退出登录"
+      >
+        <LogOut class="w-4 h-4" />
+        <span>退出登录</span>
+      </button>
     </AlertDialogTrigger>
     <AlertDialogContent class="max-w-[95svw] max-h-[95svh] md:max-w-lg grid-rows-[auto_minmax(0,1fr)_auto]">
       <AlertDialogHeader>

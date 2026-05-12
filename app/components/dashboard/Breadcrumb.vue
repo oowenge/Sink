@@ -1,13 +1,13 @@
 <script setup>
 import { NuxtLink } from '#components'
-import { Shield } from 'lucide-vue-next'
+import { Shield, Users } from 'lucide-vue-next'
+
 defineProps({
   title: {
     type: String,
     required: true,
   },
 })
-const { title } = useAppConfig()
 
 const isAdmin = ref(false)
 onMounted(() => {
@@ -16,33 +16,28 @@ onMounted(() => {
 </script>
 
 <template>
-  <Breadcrumb class="flex justify-between">
-    <BreadcrumbList>
-      <BreadcrumbItem>
-        <BreadcrumbLink href="/">
-          {{ title }}
-        </BreadcrumbLink>
-      </BreadcrumbItem>
-      <BreadcrumbSeparator />
-      <BreadcrumbItem>
-        <BreadcrumbLink
-          :as="NuxtLink"
-          to="/dashboard"
-        >
-          {{ $t('dashboard.title') }}
-        </BreadcrumbLink>
-      </BreadcrumbItem>
-      <BreadcrumbSeparator />
-      <BreadcrumbItem>
-        <BreadcrumbPage>{{ title }}</BreadcrumbPage>
-      </BreadcrumbItem>
-    </BreadcrumbList>
-    <div class="flex items-center gap-3">
-      <NuxtLink v-if="isAdmin" to="/dashboard/security" class="cursor-pointer" title="安全中心">
-        <Shield class="w-4 h-4 hover:text-primary" />
+  <div class="flex justify-end">
+    <div class="flex items-center gap-2">
+      <NuxtLink
+        v-if="isAdmin"
+        to="/dashboard/security"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+        title="安全中心"
+      >
+        <Shield class="w-4 h-4" />
+        <span>安全中心</span>
+      </NuxtLink>
+      <NuxtLink
+        v-if="isAdmin"
+        to="/dashboard/users"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+        title="用户管理"
+      >
+        <Users class="w-4 h-4" />
+        <span>用户管理</span>
       </NuxtLink>
       <DashboardChangePassword />
       <DashboardLogout />
     </div>
-  </Breadcrumb>
+  </div>
 </template>
